@@ -1,8 +1,10 @@
 from collections import namedtuple
 import functools
 import json
+import logging
 import multiprocessing
 import pathlib
+import string
 import sys
 import time
 from typing import List
@@ -10,6 +12,7 @@ from urllib.parse import urljoin
 import zipfile
 
 import lxml.etree as ET
+import numpy as np
 import pandas as pd
 import requests
 from tqdm import tqdm
@@ -25,8 +28,10 @@ clear: bool = remove existing CSV file and folder
 """
 Config = namedtuple(
     "Config",
-    ["data_path", "xsl_path", "out_path", "data_source", "clear", "num_workers", "chunksize", "token"],
-    defaults=["", "", "", "local", False, 4, 16, ""])
+    ["data_path", "mode", "out_path", "data_source", "clear", "num_workers", "chunksize", "activity_codes",  "token"],
+    defaults=["", "reestr", "", "local", False, 4, 16, [], ""])
+
+logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
 
 def make_dataframe(item, xsl_path):
@@ -52,6 +57,9 @@ def make_dataframe(item, xsl_path):
         except Exception as e:
             print(f"Something is wrong with {e}, skipping")
             print(e)
+    except Exception as e:
+        print(f"Something is wrong with {e}, skipping")
+        print(e)
 
     return None
 
@@ -91,16 +99,21 @@ class Archive:
 
 class Preprocessor:
     HOST = "https://cloud-api.yandex.net/v1/"
+    MODES = ("employees", "reestr", "revexp")
+    ACTIVITY_CODES_CLASSIFIER = "assets/activity_codes_classifier.csv"
 
     def __init__(self, config: Config):
+        assert config.mode in self.MODES, f"Unsupported mode {config.mode}"
         self._data_path = config.data_path
-        self._xsl_path = config.xsl_path
+        self._mode = config.mode
+        self._xsl_path = self._get_xsl_path(config.mode)
         self._out_path = config.out_path
         self._data_source = config.data_source
         self._clear = config.clear
         self._num_workers = config.num_workers
         self._chunksize = config.chunksize
         self._token = config.token
+        self._activity_codes = self._get_activity_codes(config.activity_codes)
 
         self._check_config()
 
@@ -132,6 +145,9 @@ class Preprocessor:
                 for df in pool.imap(func, archive, chunksize=self._chunksize):
                     if df is None:
                         continue
+                    if len(self._activity_codes) > 0 and self._mode == "reestr":
+                        df = df.loc[df["activity_code_main"].isin(self._activity_codes)]
+
                     if out_file.exists():
                         df.to_csv(out_file, index=False, header=False, mode="a")
                     else:
@@ -275,10 +291,51 @@ class Preprocessor:
         local_file.unlink()
         print(f"Local copy of downloaded file at {path} removed")
 
+    def _get_activity_codes(self, codes_from_input):
+        logging.info("Getting filters by activity code(s)")
+
+        classifier = pd.read_csv(self.ACTIVITY_CODES_CLASSIFIER)
+        logging.info(
+            f"Found activity codes classifier at {self.ACTIVITY_CODES_CLASSIFIER}"
+        )
+        codes = []
+
+        for code in codes_from_input:
+            code = code.strip()
+            if code in string.ascii_uppercase:
+                inner_codes = classifier.loc[classifier["group"] == code]
+            else:
+                inner_codes = classifier.loc[classifier["code"].str.startswith(code)]
+
+            if len(inner_codes) == 0:
+                inner_codes = pd.DataFrame(
+                    [[np.nan, code, np.nan]],
+                    columns=classifier.columns
+                )
+                logging.warning(f"Code {code} not found in the classifier and will be used as is")
+
+            codes.append(inner_codes)
+
+        if len(codes) == 0:
+            logging.info("No filtering by activity codes, using all data")
+        else:
+            codes = pd.concat(codes)
+            codes = codes.loc[codes["code"] != ""]
+
+            logging.info("Activity codes to filter (group - code - name)")
+            for _, row in codes.iterrows():
+                logging.info(f"{row[0]} - {row[1]} - {row[2]}")
+
+            codes = list(codes["code"])
+
+        return codes
+
+    def _get_xsl_path(self, mode):
+        return pathlib.Path("assets") / f"{mode}.xsl"
 
 def main():
     config = Config(
-        "sshr/xml", "sshr.xsl", "sshr/csv", "local", True, 4, 32, None)
+        "rsmp/xml", "reestr", "rsmp/csv_test", "local", True, 4, 32, ["69.10", "74.11"], None)
     p = Preprocessor(config)
     p.make_csv()
 
