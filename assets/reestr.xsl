@@ -1,11 +1,10 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <xsl:stylesheet version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform">
     <xsl:template match="/Файл">
     <data>
         <item><kind></kind></item>
         <xsl:variable name="total" select="count(Документ)"/>
         <xsl:variable name="file_id" select="@ИдФайл"/>
-        <xsl:for-each select="Документ[СвОКВЭД[СвОКВЭДОсн[@КодОКВЭД='69.10' or @КодОКВЭД='74.11']]]">
+        <xsl:for-each select="Документ">
         <item>
             <kind>
                 <xsl:value-of select="@ВидСубМСП"/>
