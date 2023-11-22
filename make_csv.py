@@ -11,11 +11,13 @@ from typing import List
 from urllib.parse import urljoin
 import zipfile
 
-import lxml.etree as ET
+from lxml import etree
 import numpy as np
 import pandas as pd
 import requests
 from tqdm import tqdm
+
+from utils.elements import elements
 
 
 """Params for preprocessor
@@ -34,29 +36,41 @@ Config = namedtuple(
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
 
-def make_dataframe(item, xsl_path):
+def make_dataframe(item, elements, target_codes=None, debug=True):
     if len(item) != 2:
         print("make_dataframe function expects filename and its content as a [str, str] tuple")
         return None
 
     fn, xml_string = item
     try:
-        df = pd.read_xml(xml_string, stylesheet=xsl_path, dtype=str)
-        df.dropna(how="all", inplace=True)
+        root = etree.fromstring(xml_string)
+        rows = []
+
+        for doc in root.iter("Документ"):
+            if target_codes is not None:
+                code = doc.xpath("string(СвОКВЭД/СвОКВЭДОсн/@КодОКВЭД)")
+                if code not in target_codes:
+                    continue
+
+            row = dict.fromkeys(elements.values())
+            for path, key in elements.items():
+                matches = doc.xpath(path)
+                if len(matches) == 0:
+                    continue
+                elif len(matches) == 1:
+                    row[key] = matches[0]
+                else:
+                    row[key] = ",".join(matches)
+            rows.append(row)
+
+        df = pd.DataFrame(rows)
+
+        if debug:
+            df["file_id"] = root.get("ИдФайл")
+            df["doc_cnt"] = root.get("КолДок")
+
         return df
-    except ET.XMLSyntaxError as e:
-        try:
-            xslt = ET.parse(xsl_path)
-            transformer = ET.XSLT(xslt)
-            p = ET.XMLParser(huge_tree=True)
-            xml = ET.fromstring(xml_string.encode("utf8"), parser=p)
-            xml_string_converted = str(transformer(xml))
-            df = pd.read_xml(xml_string_converted, dtype=str)
-            df.dropna(how="all", inplace=True)
-            return df
-        except Exception as e:
-            print(f"Something is wrong with {e}, skipping")
-            print(e)
+
     except Exception as e:
         print(f"Something is wrong with {e}, skipping")
         print(e)
@@ -95,9 +109,10 @@ class Archive:
             raise IndexError("Index for archive must be either int or slice")
 
     def _read(self, fn):
-        return self._archive.read(fn).decode()
+        return self._archive.read(fn)
 
-class Preprocessor:
+
+class XML2CSVExtractor:
     HOST = "https://cloud-api.yandex.net/v1/"
     MODES = ("employees", "reestr", "revexp")
     ACTIVITY_CODES_CLASSIFIER = "assets/activity_codes_classifier.csv"
@@ -106,14 +121,15 @@ class Preprocessor:
         assert config.mode in self.MODES, f"Unsupported mode {config.mode}"
         self._data_path = config.data_path
         self._mode = config.mode
-        self._xsl_path = self._get_xsl_path(config.mode)
         self._out_path = config.out_path
         self._data_source = config.data_source
         self._clear = config.clear
         self._num_workers = config.num_workers
         self._chunksize = config.chunksize
         self._token = config.token
-        self._activity_codes = self._get_activity_codes(config.activity_codes)
+        self._target_codes = self._get_activity_codes(config.activity_codes)
+        self._elements = self._get_elements()
+        self._debug = True if self._mode in ("reestr",) else False
 
         self._check_config()
 
@@ -122,12 +138,18 @@ class Preprocessor:
         self._history_file_path = pathlib.Path(self._out_path) / "history.json"
         self._history = self._get_history()
 
-    def make_csv(self):
+    def run(self):
         input_files = self._get_files()
 
         print(f"Found {len(input_files)} ZIP archives in data folder")
 
-        func = functools.partial(make_dataframe, xsl_path=self._xsl_path)
+        func = functools.partial(
+            make_dataframe,
+            elements=self._elements,
+            target_codes=self._target_codes,
+            debug=self._debug
+        )
+
         for filename in input_files:
             if filename in self._history:
                 print(f"{filename} already processed")
@@ -137,16 +159,17 @@ class Preprocessor:
             print(f"Processing {path}")
             out_file = pathlib.Path(self._out_path) / f"{path.stem}.csv"
 
-
             st = time.time()
             archive = Archive(path)
 
             with multiprocessing.Pool(processes=self._num_workers) as pool:
-                for df in pool.imap(func, archive, chunksize=self._chunksize):
+                for df in tqdm(
+                    pool.imap(func, archive, chunksize=self._chunksize),
+                    total=len(archive)
+                ):
                     if df is None:
+                        logging.warning("Empty df returned")
                         continue
-                    if len(self._activity_codes) > 0 and self._mode == "reestr":
-                        df = df.loc[df["activity_code_main"].isin(self._activity_codes)]
 
                     if out_file.exists():
                         df.to_csv(out_file, index=False, header=False, mode="a")
@@ -163,8 +186,8 @@ class Preprocessor:
             del archive
 
     def _check_config(self):
-        if not pathlib.Path(self._xsl_path).exists():
-            raise RuntimeError("XSL file does not exist")
+        if len(self._elements) == 0:
+            raise ValueError("Empty list of elements to extract")
 
         if self._data_source not in ("local", "ydisk"):
             raise ValueError("Data source must be either 'local' or 'ydisk'")
@@ -292,6 +315,9 @@ class Preprocessor:
         print(f"Local copy of downloaded file at {path} removed")
 
     def _get_activity_codes(self, codes_from_input):
+        if self._mode not in ("reestr", ):
+            return None
+
         logging.info("Getting filters by activity code(s)")
 
         classifier = pd.read_csv(self.ACTIVITY_CODES_CLASSIFIER)
@@ -318,26 +344,26 @@ class Preprocessor:
 
         if len(codes) == 0:
             logging.info("No filtering by activity codes, using all data")
+            codes = None
         else:
             codes = pd.concat(codes)
             codes = codes.loc[codes["code"] != ""]
 
-            logging.info("Activity codes to filter (group - code - name)")
-            for _, row in codes.iterrows():
-                logging.info(f"{row[0]} - {row[1]} - {row[2]}")
+            logging.info("Activity codes to filter")
+            logging.info(codes)
 
             codes = list(codes["code"])
 
         return codes
 
-    def _get_xsl_path(self, mode):
-        return pathlib.Path("assets") / f"{mode}.xsl"
+    def _get_elements(self):
+        return elements[self._mode]
 
 def main():
     config = Config(
-        "rsmp/xml", "reestr", "rsmp/csv_test", "local", True, 4, 32, ["69.10", "74.11"], None)
-    p = Preprocessor(config)
-    p.make_csv()
+        "revexp/xml", "revexp", "revexp/csv_test", "local", False, 3, 32, ["C"], None)
+    extractor = XML2CSVExtractor(config)
+    extractor.run()
 
 
 if __name__ == "__main__":
