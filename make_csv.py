@@ -43,7 +43,8 @@ def make_dataframe(item, elements, target_codes=None, debug=True):
 
     fn, xml_string = item
     try:
-        root = etree.fromstring(xml_string)
+        parser = etree.XMLParser(huge_tree=True)
+        root = etree.fromstring(xml_string, parser=parser)
         rows = []
 
         for doc in root.iter("Документ"):
@@ -361,7 +362,7 @@ class XML2CSVExtractor:
 
 def main():
     config = Config(
-        "revexp/xml", "revexp", "revexp/csv_test", "local", False, 3, 32, ["C"], None)
+        "rsmp/xml", "reestr", "rsmp/reestr", "local", False, 3, 32, ["C"], None)
     extractor = XML2CSVExtractor(config)
     extractor.run()
 
