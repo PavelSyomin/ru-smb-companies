@@ -362,7 +362,7 @@ class XML2CSVExtractor:
 
 def main():
     config = Config(
-        "rsmp/xml", "reestr", "rsmp/reestr", "local", False, 3, 32, ["C"], None)
+        "rsmp/xml", "reestr", "rsmp/reestr_group_A", "local", False, 3, 32, ["A"], None)
     extractor = XML2CSVExtractor(config)
     extractor.run()
 
