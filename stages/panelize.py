@@ -3,7 +3,7 @@ from typing import Optional
 import pandas as pd
 
 
-class PanelMaker:
+class Panelizer:
     def __call__(self, smb_file: str, out_file: str,
                  revexp_file: Optional[str] = None,
                  empl_file: Optional[str] = None):

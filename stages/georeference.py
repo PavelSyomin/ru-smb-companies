@@ -4,7 +4,7 @@ from fuzzywuzzy import fuzz, process
 import numpy as np
 import pandas as pd
 
-from .regions import Regions
+from utils.regions import Regions
 
 
 def join_name_and_type(name, type_):

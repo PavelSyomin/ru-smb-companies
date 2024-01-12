@@ -18,7 +18,7 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from .elements import elements
+from utils.elements import elements
 
 
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
@@ -107,8 +107,8 @@ class Extractor:
     MODES = ("smb", "revexp", "empl")
     ACTIVITY_CODES_CLASSIFIER = "assets/activity_codes_classifier.csv"
 
-    def __init__(self, data_source: Optional[str] = "local",
-                 num_workers: Optional[str] = 1, chunksize: Optional[str] = 16,
+    def __init__(self, data_source: str = "local",
+                 num_workers: int = 1, chunksize: int = 16,
                  token: Optional[str] = None):
         if data_source not in self.DATA_SOURCES:
             raise ValueError(
