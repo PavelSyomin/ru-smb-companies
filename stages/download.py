@@ -31,7 +31,7 @@ class Downloader:
                 f"Unknown storage {storage}, expected one of {self.STORAGES}")
 
         if mode not in self.OPENDATA_URLS:
-            raise RuntimeError(f"Unknown mode {mode}, expected one of {self.MODES}")
+            raise RuntimeError(f"Unknown mode {mode}, expected one of {list(self.OPENDATA_URLS.keys())}")
 
         data_urls = self._get_data_urls(mode)
 

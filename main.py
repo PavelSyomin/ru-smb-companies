@@ -20,22 +20,28 @@ app = typer.Typer(
     rich_markup_mode="markdown"
 )
 
+default_config = dict(storage="local", token="", num_workers=1, chunksize=16)
+
 app_dir = typer.get_app_dir(APP_NAME)
 app_config_path = pathlib.Path(app_dir) / "config.json"
 app_config_path.parent.mkdir(parents=True, exist_ok=True)
-if app_config_path.exists():
-    try:
-        with open(app_config_path) as f:
-            app_config = json.load(f)
-    except:
-        app_config = {}
-        print("Failed to load config")
-else:
-    app_config = dict(storage="local", token=None, num_workers=1, chunksize=16)
+try:
+    with open(app_config_path) as f:
+        app_config = json.load(f)
+except:
+    app_config = {}
+    print("Failed to load config, default options are loaded")
+    app_config = default_config
 
 
-def get_default_path(stage_name: str, mode: str) -> str:
-    return str(pathlib.Path("ru-smb-data") / stage_name / mode)
+def get_default_path(
+        stage_name: str, source_dataset: str, filename: Optional[str] = None) -> str:
+    if filename is not None:
+        path = pathlib.Path("ru-smb-data") / stage_name / source_dataset / filename
+    else:
+        path = pathlib.Path("ru-smb-data") / stage_name / source_dataset
+
+    return str(path)
 
 
 class StageNames(enum.Enum):
@@ -85,11 +91,12 @@ def download(
 
     if source_dataset is None:
         for source_dataset in SourceDatasets:
-            download_dir = get_default_path(StageNames.download.value, source_dataset.value)
+            download_dir = get_default_path(
+                StageNames.download.value, source_dataset.value)
             d(storage, source_dataset.value, download_dir)
     else:
-        download_dir = download_dir or get_default_path(STAGE_NAME, source_dataset)
-        d(storage, source_dataset, download_dir)
+        download_dir = download_dir or get_default_path(StageNames.download.value, source_dataset)
+        d(storage, source_dataset.value, download_dir)
 
 
 @app.command(rich_help_panel="Stages")
@@ -130,8 +137,8 @@ def extract(
     Extract data from downloaded source datasets (*zip* archives) to *csv* files,
     optionally filtering by activity code (stage 2)
     """
-    num_workers = app_config.get("num_workers", 1)
-    chunksize = app_config.get("chunksize", 16)
+    num_workers = app_config.get("num_workers")
+    chunksize = app_config.get("chunksize")
     storage = app_config.get("storage")
     token = app_config.get("token")
 
@@ -141,11 +148,11 @@ def extract(
     e = Extractor(storage, num_workers, chunksize, token)
     if source_dataset is None:
         for source_dataset in SourceDatasets:
-            in_dir = get_default_path("download", source_dataset.value)
+            in_dir = get_default_path(StageNames.download.value, source_dataset.value)
             out_dir = get_default_path(StageNames.extract.value, source_dataset.value)
             e(in_dir, out_dir, source_dataset.value, clear, ac)
     else:
-        in_dir = in_dir or get_default_path("download", source_dataset.value)
+        in_dir = in_dir or get_default_path(StageNames.download.value, source_dataset.value)
         out_dir = out_dir or get_default_path(StageNames.extract.value, source_dataset.value)
         e(in_dir, out_dir, source_dataset.value, clear, ac)
 
@@ -191,14 +198,16 @@ def aggregate(
     if source_dataset is None:
         for source_dataset in SourceDatasets:
             in_dir = get_default_path(StageNames.extract.value, source_dataset.value)
-            out_file = str(pathlib.Path(get_default_path(StageNames.aggregate.value, source_dataset.value)) / "agg.csv")
+            out_file = get_default_path(StageNames.aggregate.value, source_dataset.value, "agg.csv")
             if source_dataset.value in ("revexp", "empl"):
-                a(in_dir, out_file, source_dataset.value, str(smb_data_file))
+                smb_data_file = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+                a(in_dir, out_file, source_dataset.value, smb_data_file)
             else:
                 a(in_dir, out_file, source_dataset.value)
     else:
         in_dir = in_dir or get_default_path(StageNames.extract.value, source_dataset.value)
-        out_file = out_file or str(pathlib.Path(get_default_path(StageNames.aggregate.value, source_dataset.value)) / "agg.csv")
+        out_file = out_file or get_default_path(StageNames.aggregate.value, source_dataset.value, "agg.csv")
+        smb_data_file = smb_data_file or get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
         a(in_dir, out_file, source_dataset.value, str(smb_data_file))
 
 
@@ -226,8 +235,8 @@ def georeference(
     Georeference SMB aggregated data (stage 4)
     """
     g = Georeferencer()
-    in_file = str(in_file) or str(pathlib.Path(get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value)) / "agg.csv")
-    out_file = out_file or str(pathlib.Path(get_default_path(StageNames.georeference.value, SourceDatasets.smb.value)) / "georeferenced.csv")
+    in_file = str(in_file) or get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+    out_file = out_file or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
     d(in_file, out_file)
 
 
@@ -274,7 +283,9 @@ def panelize(
     """
     Make panel dataset based on georeferenced SMB data and aggregated revexp and empl tables (stage 5)
     """
-    smb_file = str(smb_file) or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, filename="georeferenced.csv")
+    smb_file = str(smb_file) or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
+    revexp_file = str(revexp_file) or get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value, "agg.csv")
+    empl_file = str(empl_file) or get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv")
     p = Panelizer()
     p(smb_file, out_file, revexp_file, empl_file)
 
@@ -283,24 +294,28 @@ def panelize(
 def config(
     show: Annotated[
         bool,
-        typer.Option("--show", help="Only show current config without updating", show_default="false")
+        typer.Option(
+            "--show",
+            help="Only show current config without updating",
+            show_default="false",
+            rich_help_panel="Control")
     ] = False,
-    ydisk_token: Annotated[
-        str,
-        typer.Option(help="Token for Yandex Disk; used if *storage* is *ydisk*")
-    ] = "",
+    chunksize: Annotated[
+        int,
+        typer.Option(help="Chunk size for extractor", rich_help_panel="Available options")
+    ] = 16,
     num_workers: Annotated[
         int,
-        typer.Option(help="Number of workers = processes for extractor")
+        typer.Option(help="Number of workers = processes for extractor", rich_help_panel="Available options")
     ] = 1,
-    extractor_chunksize: Annotated[
-        int,
-        typer.Option(help="Chunk size for extractor")
-    ] = 16,
     storage: Annotated[
         Storages,
-        typer.Option(help="Place to download source datasets (note: *source datasets only* rather than all other files)")
+        typer.Option(help="Place to download source datasets (note: *source datasets only* rather than all other files)", rich_help_panel="Available options")
     ] = Storages.local.value,
+    ydisk_token: Annotated[
+        str,
+        typer.Option(help="Token for Yandex Disk; used if *storage* is *ydisk*", rich_help_panel="Available options")
+    ] = "",
 ):
     """
     Show or set global options for all commands
@@ -345,7 +360,7 @@ def process(
     if download:
         download()
 
-    extract()
+    extract(ac=ac)
     aggregate()
     georeference()
     panelize()
