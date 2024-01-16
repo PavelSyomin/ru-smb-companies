@@ -281,15 +281,37 @@ def panelize(
 
 @app.command(rich_help_panel="Configuration")
 def config(
-    show: Annotated[bool, typer.Option("--show")] = True,
-    ydisk_token: Optional[str] = None,
-    extractor_num_workers: int = 1,
-    extractor_chunksize: int = 16,
-    storage: Storages = Storages.local.value,
+    show: Annotated[
+        bool,
+        typer.Option("--show", help="Only show current config without updating", show_default="false")
+    ] = False,
+    ydisk_token: Annotated[
+        str,
+        typer.Option(help="Token for Yandex Disk; used if *storage* is *ydisk*")
+    ] = "",
+    num_workers: Annotated[
+        int,
+        typer.Option(help="Number of workers = processes for extractor")
+    ] = 1,
+    extractor_chunksize: Annotated[
+        int,
+        typer.Option(help="Chunk size for extractor")
+    ] = 16,
+    storage: Annotated[
+        Storages,
+        typer.Option(help="Place to download source datasets (note: *source datasets only* rather than all other files)")
+    ] = Storages.local.value,
 ):
     """
     Show or set global options for all commands
     """
+    if show:
+        print("Current configuration")
+        for key, value in app_config.items():
+            print(key, value)
+
+        return
+
     app_config["token"] = ydisk_token
     app_config["num_workers"] = extractor_num_workers
     app_config["chunksize"] = extractor_chunksize
