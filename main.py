@@ -15,7 +15,10 @@ from stages.panelize import Panelizer
 
 APP_NAME = "ru_smb_companies"
 
-app = typer.Typer(rich_markup_mode="markdown")
+app = typer.Typer(
+    help="Create dataset of Russian SMB companies (and individuals) based on Federal Tax Service's open data",
+    rich_markup_mode="markdown"
+)
 
 app_dir = typer.get_app_dir(APP_NAME)
 app_config_path = pathlib.Path(app_dir) / "config.json"
@@ -54,7 +57,7 @@ class SourceDatasets(enum.Enum):
     empl = "empl"
 
 
-@app.command()
+@app.command(rich_help_panel="Stages")
 def download(
     source_dataset: Annotated[
         Optional[SourceDatasets],
@@ -70,6 +73,9 @@ def download(
         )
     ] = None
 ):
+    """
+    Download source dataset(s) from FTS open data server (stage 1)
+    """
     storage = app_config.get("storage")
     token = app_config.get("token")
     if storage in ("ydisk", ) and token is None:
@@ -86,7 +92,7 @@ def download(
         d(storage, source_dataset, download_dir)
 
 
-@app.command()
+@app.command(rich_help_panel="Stages")
 def extract(
     in_dir: Annotated[
         Optional[str],
@@ -120,6 +126,10 @@ def extract(
         )
     ] = None,
 ):
+    """
+    Extract data from downloaded source datasets (*zip* archives) to *csv* files,
+    optionally filtering by activity code (stage 2)
+    """
     num_workers = app_config.get("num_workers", 1)
     chunksize = app_config.get("chunksize", 16)
     storage = app_config.get("storage")
@@ -140,7 +150,7 @@ def extract(
         e(in_dir, out_dir, source_dataset.value, clear, ac)
 
 
-@app.command()
+@app.command(rich_help_panel="Stages")
 def aggregate(
     in_dir: Annotated[
         Optional[str],
@@ -174,6 +184,9 @@ def aggregate(
         )
     ] = None
 ):
+    """
+    Aggregate extracted CSV files into a single CSV file removing duplicates (stage 3)
+    """
     a = Aggregator()
     if source_dataset is None:
         for source_dataset in SourceDatasets:
@@ -189,7 +202,7 @@ def aggregate(
         a(in_dir, out_file, source_dataset.value, str(smb_data_file))
 
 
-@app.command()
+@app.command(rich_help_panel="Stages")
 def georeference(
     in_file: Annotated[
         Optional[pathlib.Path],
@@ -209,13 +222,16 @@ def georeference(
         )
     ] = None
 ):
+    """
+    Georeference SMB aggregated data (stage 4)
+    """
     g = Georeferencer()
     in_file = str(in_file) or str(pathlib.Path(get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value)) / "agg.csv")
     out_file = out_file or str(pathlib.Path(get_default_path(StageNames.georeference.value, SourceDatasets.smb.value)) / "georeferenced.csv")
     d(in_file, out_file)
 
 
-@app.command()
+@app.command(rich_help_panel="Stages")
 def panelize(
     smb_file: Annotated[
         Optional[pathlib.Path],
@@ -255,12 +271,15 @@ def panelize(
         )
     ] = None,
 ):
+    """
+    Make panel dataset based on georeferenced SMB data and aggregated revexp and empl tables (stage 5)
+    """
     smb_file = str(smb_file) or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, filename="georeferenced.csv")
     p = Panelizer()
     p(smb_file, out_file, revexp_file, empl_file)
 
 
-@app.command()
+@app.command(rich_help_panel="Configuration")
 def config(
     show: Annotated[bool, typer.Option("--show")] = True,
     ydisk_token: Optional[str] = None,
@@ -268,6 +287,9 @@ def config(
     extractor_chunksize: int = 16,
     storage: Storages = Storages.local.value,
 ):
+    """
+    Show or set global options for all commands
+    """
     app_config["token"] = ydisk_token
     app_config["num_workers"] = extractor_num_workers
     app_config["chunksize"] = extractor_chunksize
@@ -279,57 +301,32 @@ def config(
     print("Configuration updated")
 
 
-@app.command()
-def process(activity_codes: str = ""):
-    # Specify various paths
-    data_path = pathlib.Path("data")
-    raw_data_path = data_path / "raw"
-    proc_data_path = data_path / "proc"
-    result_data_path = data_path / "result"
+@app.command(rich_help_panel="Magic")
+def process(
+    download: Annotated[
+        bool,
+        typer.Option(
+            help="Download source datasets before processing. If False, the application expects that source datasets have already been downloaded to *ru-smb-data/download/smb*, *ru-smb-data/download/revexp*, and ru-smb-data/download/empl*"
+        )
+    ] = False,
+    ac: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled. If *source_dataset* (see above) is *revexp* or *empl*, filtering is not performed",
+            show_default="no filtering by activity code(s)"
+        )
+    ] = None
+):
+    """
+    Process the source data with this single command
+    """
+    if download:
+        download()
 
-    # Download stage (1) is omitted
-
-    for mode in ("smb", "revexp", "empl"):
-        # Extract stage (2)
-        in_dir = raw_data_path / mode
-        out_dir = proc_data_path / mode
-        if in_dir.exists():
-            extract(in_dir, out_dir, mode, clean=False, activity_codes=activity_codes)
-
-        # Aggregate stage (3)
-        in_dir = out_dir
-        out_file = proc_data_path / mode / "agg.csv"
-        if in_dir.exists():
-            if mode == "smb":
-                aggregate(in_dir, out_file, mode)
-            else:
-                aggregate(in_dir, out_file, mode, proc_data_path / "smb" / "agg.csv")
-
-    # Georeference stage (4)
-    georeference(proc_data_path / "smb" / "agg.csv", result_data_path / "smb.csv")
-
-    # Make panel (5)
-    panelize(
-        result_data_path / "smb.csv",
-        result_data_path / "panel.csv",
-        proc_data_path / "revexp" / "agg.csv",
-        proc_data_path / "empl" / "agg.csv"
-    )
-
-    shutil.copy(proc_data_path / "revexp" / "agg.csv", result_data_path / "revexp.csv")
-    shutil.copy(proc_data_path / "empl" / "agg.csv", result_data_path / "empl.csv")
-
-
-@app.command()
-def download_and_process(activity_codes: str = ""):
-    # Specify various paths
-    data_path = pathlib.Path("data")
-    raw_data_path = data_path / "raw"
-
-    for mode in ("smb", "revexp", "empl"):
-        download("local", mode, raw_data_path / mode)
-
-    process(activity_codes)
+    extract()
+    aggregate()
+    georeference()
+    panelize()
 
 
 if __name__ == "__main__":
