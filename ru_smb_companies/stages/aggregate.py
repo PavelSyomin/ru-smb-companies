@@ -7,7 +7,7 @@ from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql.functions import (coalesce, desc, first, last, lead,
     lower, lpad, row_number, upper, year)
 
-from utils.spark_schemas import smb_schema, revexp_schema, empl_schema
+from ..utils.spark_schemas import smb_schema, revexp_schema, empl_schema
 
 
 def _write(df: DataFrame, out_file: str):
@@ -22,6 +22,7 @@ def _write(df: DataFrame, out_file: str):
         if result is None:
             print("Failed to save file")
 
+        pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
         shutil.move(result, out_file)
 
 

@@ -18,7 +18,8 @@ import pandas as pd
 import requests
 from tqdm import tqdm
 
-from utils.elements import elements
+from ..assets import get_asset_path
+from ..utils.elements import elements
 
 
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
@@ -105,7 +106,7 @@ class Extractor:
     DATA_SOURCES = ("local", "ydisk")
     HOST = "https://cloud-api.yandex.net/v1/"
     MODES = ("smb", "revexp", "empl")
-    ACTIVITY_CODES_CLASSIFIER = "assets/activity_codes_classifier.csv"
+    ACTIVITY_CODES_CLASSIFIER = get_asset_path("activity_codes_classifier.csv")
 
     def __init__(self, data_source: str = "local",
                  num_workers: int = 1, chunksize: int = 16,

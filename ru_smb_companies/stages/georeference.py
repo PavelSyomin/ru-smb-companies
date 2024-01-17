@@ -4,7 +4,8 @@ from fuzzywuzzy import fuzz, process
 import numpy as np
 import pandas as pd
 
-from utils.regions import Regions
+from ..assets import get_asset_path
+from ..utils.regions import Regions
 
 
 def join_name_and_type(name, type_):
@@ -40,11 +41,11 @@ def preprocess_text_column(c):
 
 
 class Georeferencer:
-    ABBR_PATH = "assets/socrbase.csv"
-    CITIES_BASE_PATH = "assets/cities.csv"
-    CITIES_ADDITIONAL_PATH = "assets/cities_additional.csv"
-    REGIONS_PATH = "assets/regions.csv"
-    SETTLEMENTS_PATH = "assets/settlements.csv"
+    ABBR_PATH = get_asset_path("socrbase.csv")
+    CITIES_BASE_PATH = get_asset_path("cities.csv")
+    CITIES_ADDITIONAL_PATH = get_asset_path("cities_additional.csv")
+    REGIONS_PATH = get_asset_path("regions.csv")
+    SETTLEMENTS_PATH = get_asset_path("settlements.csv")
 
     def __init__(self):
         self._abbr = None
@@ -496,5 +497,5 @@ class Georeferencer:
         ]
         product = data[product_cols]
 
+        pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
         product.to_csv(out_file, index=False)
-        product.iloc[:1000, ].to_csv(f"{out_file.replace('.csv', '_demo.csv')}", index=False)

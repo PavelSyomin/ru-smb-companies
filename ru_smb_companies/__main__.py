@@ -6,11 +6,11 @@ from typing_extensions import Annotated
 
 import typer
 
-from stages.aggregate import Aggregator
-from stages.download import Downloader
-from stages.extract import Extractor
-from stages.georeference import Georeferencer
-from stages.panelize import Panelizer
+from ru_smb_companies.stages.aggregate import Aggregator
+from ru_smb_companies.stages.download import Downloader
+from ru_smb_companies.stages.extract import Extractor
+from ru_smb_companies.stages.georeference import Georeferencer
+from ru_smb_companies.stages.panelize import Panelizer
 
 
 APP_NAME = "ru_smb_companies"
@@ -174,7 +174,7 @@ def aggregate(
         )
     ] = None,
     source_dataset: Annotated[
-        Optional[str],
+        SourceDatasets,
         typer.Option(
             help="Label of the source dataset in FTS open data: **smb** is small&medium-sized businesses registry, **revexp** is data on revenue and expenditure of organizations, **empl** is data on conut of employees of organizations. If option is not specified, than all three datasets are downloaded",
             show_default="all three source datasets"
@@ -235,9 +235,9 @@ def georeference(
     Georeference SMB aggregated data (stage 4)
     """
     g = Georeferencer()
-    in_file = str(in_file) or get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+    in_file = in_file or get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
     out_file = out_file or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
-    d(in_file, out_file)
+    g(str(in_file), out_file)
 
 
 @app.command(rich_help_panel="Stages")
