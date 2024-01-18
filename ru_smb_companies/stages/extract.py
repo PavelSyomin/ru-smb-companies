@@ -129,6 +129,10 @@ class Extractor:
                  clear: Optional[bool] = False,
                  activity_codes: Optional[List[str]] = None):
         input_files = self._get_files(in_dir)
+        if len(input_files) == 0:
+            print("Input path does not contain source XML files")
+            return
+
         history_file_path = pathlib.Path(out_dir) / "history.json"
         history = self._get_history(history_file_path)
         self._make_out_folder(out_dir, clear)
@@ -221,7 +225,11 @@ class Extractor:
     def _get_files(self, directory: str) -> List[str]:
         if self._data_source == "local":
             data_folder = pathlib.Path(directory)
-            files = [f.name for f in data_folder.glob("*.zip")]
+            if not data_folder.exists():
+                print(f"Folder with source data {data_folder} not found")
+                files = []
+            else:
+                files = [f.name for f in data_folder.glob("*.zip")]
         else:
             files = self._get_file_list_from_ydisk(directory)
 

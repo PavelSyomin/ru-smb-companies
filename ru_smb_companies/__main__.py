@@ -17,7 +17,7 @@ APP_NAME = "ru_smb_companies"
 
 app = typer.Typer(
     help="Create dataset of Russian SMB companies (and individuals) based on Federal Tax Service's open data",
-    rich_markup_mode="markdown"
+    rich_markup_mode="markdown",
 )
 
 default_config = dict(storage="local", token="", num_workers=1, chunksize=16)
@@ -35,7 +35,10 @@ except:
 
 
 def get_default_path(
-        stage_name: str, source_dataset: str, filename: Optional[str] = None) -> str:
+    stage_name: str,
+    source_dataset: str,
+    filename: Optional[str] = None,
+) -> str:
     if filename is not None:
         path = pathlib.Path("ru-smb-data") / stage_name / source_dataset / filename
     else:
@@ -95,7 +98,7 @@ def download(
                 StageNames.download.value, source_dataset.value)
             d(storage, source_dataset.value, download_dir)
     else:
-        download_dir = download_dir or get_default_path(StageNames.download.value, source_dataset)
+        download_dir = download_dir or get_default_path(StageNames.download.value, source_dataset.value)
         d(storage, source_dataset.value, download_dir)
 
 
@@ -283,14 +286,14 @@ def panelize(
     """
     Make panel dataset based on georeferenced SMB data and aggregated revexp and empl tables (stage 5)
     """
-    smb_file = str(smb_file) or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
-    revexp_file = str(revexp_file) or get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value, "agg.csv")
-    empl_file = str(empl_file) or get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv")
+    smb_file = smb_file or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
+    revexp_file = revexp_file or get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value, "agg.csv")
+    empl_file = empl_file or get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv")
     p = Panelizer()
-    p(smb_file, out_file, revexp_file, empl_file)
+    p(str(smb_file), out_file, str(revexp_file), str(empl_file))
 
 
-@app.command(rich_help_panel="Configuration")
+@app.command(rich_help_panel="Configuration", no_args_is_help=True)
 def config(
     show: Annotated[
         bool,
@@ -338,8 +341,9 @@ def config(
     print("Configuration updated")
 
 
-@app.command(rich_help_panel="Magic")
+@app.callback(rich_help_panel="Magic", invoke_without_command=True)
 def process(
+    ctx: typer.Context,
     download: Annotated[
         bool,
         typer.Option(
@@ -357,6 +361,9 @@ def process(
     """
     Process the source data with this single command
     """
+    if ctx.invoked_subcommand is not None:
+        return
+
     if download:
         download()
 

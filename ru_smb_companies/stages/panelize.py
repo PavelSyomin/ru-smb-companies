@@ -1,3 +1,4 @@
+import pathlib
 from typing import Optional
 
 import pandas as pd
@@ -7,6 +8,10 @@ class Panelizer:
     def __call__(self, smb_file: str, out_file: str,
                  revexp_file: Optional[str] = None,
                  empl_file: Optional[str] = None):
+        if not pathlib.Path(smb_file).exists():
+            print(f"Input file {smb_file} not found")
+            return
+
         data = pd.read_csv(smb_file, dtype=str)
 
         data["start_date"] = pd.to_datetime(data["start_date"])
@@ -28,11 +33,11 @@ class Panelizer:
             panel_elems.append(yearly_data)
         panel = pd.concat(panel_elems)
 
-        if revexp_file is not None:
+        if revexp_file is not None and pathlib.Path(revexp_file).exists():
             revexp = pd.read_csv(revexp_file, dtype=str)
             panel = panel.merge(revexp, how="left", on=["tin", "year"])
 
-        if empl_file is not None:
+        if empl_file is not None and pathlib.Path(empl_file).exists():
             empl = pd.read_csv(empl_file, dtype=str)
             panel = panel.merge(empl, how="left", on=["tin", "year"])
 

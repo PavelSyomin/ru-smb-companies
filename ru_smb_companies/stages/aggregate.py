@@ -1,13 +1,24 @@
 import pathlib
 import shutil
 import tempfile
-from typing import Optional
+from typing import List, Optional
 
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql.functions import (coalesce, desc, first, last, lead,
     lower, lpad, row_number, upper, year)
 
 from ..utils.spark_schemas import smb_schema, revexp_schema, empl_schema
+
+
+def get_input_files(in_dir: str) -> List[str]:
+    path = pathlib.Path(in_dir)
+    if not path.exists():
+        print(f"Input path {in_dir} not found")
+        return []
+
+    csv_files = [str(fn) for fn in path.glob("data-*.csv")]
+
+    return csv_files
 
 
 def _write(df: DataFrame, out_file: str):
@@ -38,12 +49,17 @@ class Aggregator:
     def __call__(self, in_dir: str, out_file: str,
                  mode: str, smb_data_file: Optional[str] = None):
         """Execute the aggregation of all datasets"""
+        input_files = get_input_files(in_dir)
+        if len(input_files) == 0:
+            print("Input directory does not contain extracted CSV files")
+            return
+
         if mode == "smb":
-            self._process_smb_registry(in_dir, out_file)
+            self._process_smb_registry(input_files, out_file)
         elif mode == "revexp":
-            self._process_revexp_data(in_dir, out_file, smb_data_file)
+            self._process_revexp_data(input_files, out_file, smb_data_file)
         elif mode == "empl":
-            self._process_empl_data(in_dir, out_file, smb_data_file)
+            self._process_empl_data(input_files, out_file, smb_data_file)
         else:
             raise RuntimeError(
                 f"Unsupported mode {mode}, expected one of {self.MODES}")
@@ -62,14 +78,11 @@ class Aggregator:
         web_url = self._session.sparkContext.uiWebUrl
         print(f"Spark session have started. You can monitor it at {web_url}")
 
-    def _process_smb_registry(self, in_dir: str, out_file: str):
+    def _process_smb_registry(self, input_files: List[str], out_file: str):
         """Process CSV files extacted from SMB registry archives"""
-        path = pathlib.Path(in_dir)
-        csv_files = [str(fn) for fn in path.glob("data-*.csv")]
-
         data = self._session.read.options(
             header=True, dateFormat="dd.MM.yyyy", escape='"'
-        ).schema(smb_schema).csv(csv_files)
+        ).schema(smb_schema).csv(input_files)
 
         initial_count = data.count()
         print(f"Source CSV files contain {initial_count} rows")
@@ -168,15 +181,12 @@ class Aggregator:
 
         _write(table, out_file)
 
-    def _process_revexp_data(self, in_dir: str, out_file: str,
+    def _process_revexp_data(self, input_files: List[str], out_file: str,
                              smb_data_file: Optional[str]):
         """Combine revexp CSV files into a single file filtering by TINs"""
-        path = pathlib.Path(in_dir)
-        csv_files = [str(fn) for fn in path.glob("data-*.csv")]
-
         data = self._session.read.options(
             header=True, dateFormat="dd.MM.yyyy"
-        ).schema(revexp_schema).csv(csv_files)
+        ).schema(revexp_schema).csv(input_files)
 
         print(f"Revexp source CSV files contain {data.count()} rows")
 
@@ -195,7 +205,7 @@ class Aggregator:
             table
             .withColumn("row_number", row_number().over(window))
             .filter("row_number == 1")
-            .select("tin", year("data_date").alias("year"), "revenue", "expediture")
+            .select("tin", year("data_date").alias("year"), "revenue", "expenditure")
             .orderBy("tin", "year")
             .cache()
         )
@@ -204,15 +214,12 @@ class Aggregator:
 
         _write(table, out_file)
 
-    def _process_empl_data(self, in_path: str, out_file: str,
+    def _process_empl_data(self, input_files: List[str], out_file: str,
                            smb_data_file: Optional[str]):
         """Combine employees CSV files into a single file filtering by TINs"""
-        path = pathlib.Path(in_path)
-        csv_files = [str(fn) for fn in path.glob("data-*.csv")]
-
         data = self._session.read.options(
             header=True, dateFormat="dd.MM.yyyy"
-        ).schema(empl_schema).csv(csv_files)
+        ).schema(empl_schema).csv(input_files)
         print(f"Employees source CSV files contain {data.count()} rows")
 
         window = Window.partitionBy("tin", "data_date").orderBy(desc("doc_date"))

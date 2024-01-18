@@ -1,3 +1,4 @@
+import pathlib
 from typing import Union
 
 from fuzzywuzzy import fuzz, process
@@ -56,6 +57,10 @@ class Georeferencer:
         self._setup_geodata()
 
     def __call__(self, in_file: str, out_file: str):
+        if not pathlib.Path(in_file).exists():
+            print(f"Input file {in_file} not found")
+            return
+
         data = pd.read_csv(in_file, dtype=str)
         data["id"] = range(0, data.shape[0])
 
