@@ -11,6 +11,7 @@ from ru_smb_companies.stages.download import Downloader
 from ru_smb_companies.stages.extract import Extractor
 from ru_smb_companies.stages.georeference import Georeferencer
 from ru_smb_companies.stages.panelize import Panelizer
+from utils.enums import SourceDatasets, StageNames, Storages
 
 
 APP_NAME = "ru_smb_companies"
@@ -75,29 +76,8 @@ def get_default_path(
 def get_downloader(app_config: dict) -> Downloader:
     storage = app_config.get("storage")
     token = app_config.get("token")
-    if storage in ("ydisk", ) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
 
-    return Downloader(token)
-
-
-class StageNames(enum.Enum):
-    download = "download"
-    extract = "extract"
-    aggregate = "aggregate"
-    georeference = "georeference"
-    panelize = "panelize"
-
-
-class Storages(enum.Enum):
-    local = "local"
-    ydisk = "ydisk"
-
-
-class SourceDatasets(enum.Enum):
-    smb = "smb"
-    revexp = "revexp"
-    empl = "empl"
+    return Downloader(storage, token)
 
 
 @download_app.command("all", rich_help_panel="Source dataset(s)")
@@ -112,16 +92,13 @@ def download_all(
     """
     Download all three source dataset(s)
     """
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-    if storage in ("ydisk", ) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    d = Downloader(token)
-
+    d = get_downloader(app_config)
+    args = dict(
+        download_dir=str(download_dir / source_dataset.value)
+    )
     for source_dataset in SourceDatasets:
-        path = download_dir / source_dataset.value
-        d(storage, source_dataset.value, str(path))
+        args["source_dataset"] = source_dataset.value
+        d(**args)
 
 
 @download_app.command("smb", rich_help_panel="Source dataset(s)")
@@ -136,13 +113,8 @@ def download_smb(
     """
     Download **s**mall&**m**edium-sized **b**usinesses registry
     """
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-    if storage in ("ydisk", ) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    d = Downloader(token)
-    d(storage, SourceDatasets.smb.value, str(download_dir))
+    d = get_downloader(app_config)
+    d(SourceDatasets.smb.value, str(download_dir))
 
 
 @download_app.command("revexp", rich_help_panel="Source dataset(s)")
@@ -157,13 +129,8 @@ def download_revexp(
     """
     Download data on **rev**enue and **exp**enditure of companies
     """
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-    if storage in ("ydisk", ) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    d = Downloader(token)
-    d(storage, SourceDatasets.revexp.value, str(download_dir))
+    d = get_downloader(app_config)
+    d(SourceDatasets.revexp.value, str(download_dir))
 
 
 @download_app.command("empl", rich_help_panel="Source dataset(s)")
@@ -178,13 +145,8 @@ def download_empl(
     """
     Download data on number of **empl**oyees in companies
     """
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-    if storage in ("ydisk", ) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    d = Downloader(token)
-    d(storage, SourceDatasets.empl.value, str(download_dir))
+    d = get_downloader(app_config)
+    d(SourceDatasets.empl.value, str(download_dir))
 
 
 @extract_app.command("all", rich_help_panel="Source dataset(s)")
