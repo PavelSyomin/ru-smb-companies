@@ -41,4 +41,5 @@ class Panelizer:
             empl = pd.read_csv(empl_file, dtype=str)
             panel = panel.merge(empl, how="left", on=["tin", "year"])
 
+        pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
         panel.to_csv(out_file, index=False)
