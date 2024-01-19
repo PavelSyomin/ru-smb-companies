@@ -20,6 +20,7 @@ from tqdm import tqdm
 
 from ..assets import get_asset_path
 from ..utils.elements import elements
+from ..utils.enums import SourceDatasets, Storages
 
 
 logging.basicConfig(encoding='utf-8', level=logging.INFO)
@@ -103,29 +104,31 @@ class Archive:
 
 
 class Extractor:
-    DATA_SOURCES = ("local", "ydisk")
+    STORAGES = [s.value for s in Storages]
     HOST = "https://cloud-api.yandex.net/v1/"
-    MODES = ("smb", "revexp", "empl")
+    SOURCE_DATASETS = [sd.value for sd in SourceDatasets]
     ACTIVITY_CODES_CLASSIFIER = get_asset_path("activity_codes_classifier.csv")
 
-    def __init__(self, data_source: str = "local",
+    def __init__(self, storage: str = Storages.local.value,
                  num_workers: int = 1, chunksize: int = 16,
                  token: Optional[str] = None):
-        if data_source not in self.DATA_SOURCES:
-            raise ValueError(
-                f"Unknown data source {data_source}, "
-                f"expected one of {self.DATA_SOURCES}"
-            )
-        self._data_source = data_source
+        if storage not in self.STORAGES:
+            raise RuntimeError(
+                f"Unknown storage {storage}, expected one of {self.STORAGES}")
+
+        if storage in (Storages.ydisk.value,) and token is None:
+            raise RuntimeError("Token is required to use ydisk storage")
+
         self._num_workers = num_workers
         self._chunksize = chunksize
         self._token = token
+        self._storage = storage
         self._temp_dir = None
 
-        if data_source in ("ydisk",):
+        if storage in (Storages.ydisk.value,):
             self._temp_dir = tempfile.TemporaryDirectory()
 
-    def __call__(self, in_dir: str, out_dir: str, mode: str,
+    def __call__(self, in_dir: str, out_dir: str, source_dataset: str,
                  clear: Optional[bool] = False,
                  activity_codes: Optional[List[str]] = None):
         input_files = self._get_files(in_dir)
@@ -144,9 +147,9 @@ class Extractor:
 
         func = functools.partial(
             _make_dataframe,
-            elements=self._get_elements(mode),
-            target_codes=self._get_activity_codes(activity_codes, mode),
-            debug=True if mode in ("smb",) else False
+            elements=self._get_elements(source_dataset),
+            target_codes=self._get_activity_codes(activity_codes, source_dataset),
+            debug=True if source_dataset in (SourceDatasets.smb.value,) else False
         )
 
         for filename in input_files:
@@ -223,7 +226,7 @@ class Extractor:
             json.dump(history, f)
 
     def _get_files(self, directory: str) -> List[str]:
-        if self._data_source == "local":
+        if self._storage == Storages.local.value:
             data_folder = pathlib.Path(directory)
             if not data_folder.exists():
                 print(f"Folder with source data {data_folder} not found")
@@ -292,7 +295,7 @@ class Extractor:
             out_path.mkdir(parents=True)
 
     def _resolve_local_file_path(self, data_path: str, filename: str) -> pathlib.Path:
-        if self._data_source == "local":
+        if self._storage == Storages.local.value:
             file_path = pathlib.Path(data_path) / filename
         else:
             file_path = self._download(data_path, filename)
@@ -300,7 +303,7 @@ class Extractor:
         return file_path
 
     def _remove_local_file(self, path: pathlib.Path):
-        if self._data_source == "local":
+        if self._storage == Storages.local.value:
             return
 
         if not local_file.exists():
@@ -310,8 +313,8 @@ class Extractor:
         print(f"Local copy of downloaded file at {path} removed")
 
     def _get_activity_codes(
-            self, codes_from_input: List[str], mode: str) -> Optional[List[str]]:
-        if mode not in ("smb", ):
+            self, codes_from_input: List[str], source_dataset: str) -> Optional[List[str]]:
+        if source_dataset not in (SourceDatasets.smb.value, ):
             return None
 
         logging.info("Getting filters by activity code(s)")
@@ -352,17 +355,9 @@ class Extractor:
 
         return codes
 
-    def _get_elements(self, mode: str):
-        if mode not in self.MODES:
-            raise RuntimeError(f"(Unknown mode {mode}, expected one of {self.MODES}")
+    def _get_elements(self, source_dataset: str):
+        if source_dataset not in self.SOURCE_DATASETS:
+            raise RuntimeError(f"(Unknown source dataset {source_dataset}, "
+                f"expected one of {self.SOURCE_DATASETS}")
 
-        return elements[mode]
-
-
-def main():
-    extractor = Extractor()
-    extractor()
-
-
-if __name__ == "__main__":
-    main()
+        return elements[source_dataset]
