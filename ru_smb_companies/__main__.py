@@ -80,6 +80,15 @@ def get_downloader(app_config: dict) -> Downloader:
     return Downloader(storage, token)
 
 
+def get_extractor(app_config: dict) -> Extractor:
+    num_workers = app_config.get("num_workers")
+    chunksize = app_config.get("chunksize")
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+
+    return Extractor(storage, num_workers, chunksize, token)
+
+
 @download_app.command("all", rich_help_panel="Source dataset(s)")
 def download_all(
     download_dir: Annotated[
@@ -177,15 +186,7 @@ def extract_all(
     """
     Extract data from all three downloaded source datasets
     """
-    num_workers = app_config.get("num_workers")
-    chunksize = app_config.get("chunksize")
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-
-    if storage in ("ydisk",) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    e = Extractor(storage, num_workers, chunksize, token)
+    e = get_extractor(app_config)
     for source_dataset in SourceDatasets:
         args = dict(
             in_dir=str(in_dir / source_dataset.value),
@@ -226,15 +227,7 @@ def extract_smb(
     Extract data from downloaded *zip* archives of SMB registry to *csv* files,
     optionally filtering by activity code (stage 2)
     """
-    num_workers = app_config.get("num_workers")
-    chunksize = app_config.get("chunksize")
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-
-    if storage in ("ydisk",) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    e = Extractor(storage, num_workers, chunksize, token)
+    e = get_extractor(app_config)
     e(str(in_dir), str(out_dir), SourceDatasets.smb.value, clear, ac)
 
 
@@ -259,15 +252,7 @@ def extract_revexp(
     """
     Extract data from downloaded *zip* archives of revexp data to *csv* files
     """
-    num_workers = app_config.get("num_workers")
-    chunksize = app_config.get("chunksize")
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-
-    if storage in ("ydisk",) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    e = Extractor(storage, num_workers, chunksize, token)
+    e = get_extractor(app_config)
     e(str(in_dir), str(out_dir), SourceDatasets.revexp.value, clear)
 
 
@@ -292,15 +277,7 @@ def extract_empl(
     """
     Extract data from downloaded *zip* archives of empl data to *csv* files
     """
-    num_workers = app_config.get("num_workers")
-    chunksize = app_config.get("chunksize")
-    storage = app_config.get("storage")
-    token = app_config.get("token")
-
-    if storage in ("ydisk",) and token is None:
-        raise RuntimeError("Token is required to use ydisk storage")
-
-    e = Extractor(storage, num_workers, chunksize, token)
+    e = get_extractor(app_config)
     e(str(in_dir), str(out_dir), SourceDatasets.empl.value, clear)
 
 
@@ -331,7 +308,6 @@ def aggregate_all(
         )
         if source_dataset.value in ("revexp", "empl"):
             args["smb_data_file"] = str(get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv"))
-
         a(**args)
 
 
