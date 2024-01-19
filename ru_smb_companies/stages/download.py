@@ -30,7 +30,7 @@ class Downloader:
             raise RuntimeError(
                 f"Unknown storage {storage}, expected one of {self.STORAGES}")
 
-        if storage in ("ydisk",) and token is None:
+        if storage in (Storages.ydisk.value,) and token is None:
             raise RuntimeError("Token is required to use ydisk storage")
 
         self._token = token
@@ -47,13 +47,13 @@ class Downloader:
             download_dir = self._get_default_download_dir(source_dataset)
         self._create_download_dir(download_dir)
 
-        if self._storage == "local":
+        if self._storage == Storages.local.value:
             self._download_to_local(data_urls, download_dir)
-        elif self._storage == "ydisk":
+        elif self._storage == Storages.ydisk.value:
             self._download_to_ydisk(data_urls, download_dir)
 
     def _create_download_dir(self, download_dir: str):
-        if self._storage == "local":
+        if self._storage == Storages.local.value:
             path = pathlib.Path(download_dir)
             if not path.exists():
                 path.mkdir(parents=True)
