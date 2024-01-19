@@ -11,7 +11,7 @@ from ru_smb_companies.stages.download import Downloader
 from ru_smb_companies.stages.extract import Extractor
 from ru_smb_companies.stages.georeference import Georeferencer
 from ru_smb_companies.stages.panelize import Panelizer
-from utils.enums import SourceDatasets, StageNames, Storages
+from ru_smb_companies.utils.enums import SourceDatasets, StageNames, Storages
 
 
 APP_NAME = "ru_smb_companies"
@@ -93,11 +93,11 @@ def download_all(
     Download all three source dataset(s)
     """
     d = get_downloader(app_config)
-    args = dict(
-        download_dir=str(download_dir / source_dataset.value)
-    )
     for source_dataset in SourceDatasets:
-        args["source_dataset"] = source_dataset.value
+        args = dict(
+            download_dir=str(download_dir / source_dataset.value),
+            source_dataset = source_dataset.value
+        )
         d(**args)
 
 
