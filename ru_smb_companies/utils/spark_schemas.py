@@ -1,4 +1,5 @@
-from pyspark.sql.types import StructField, StructType, ByteType, DateType, FloatType, IntegerType, ShortType, StringType
+from pyspark.sql.types import (StructField, StructType, ByteType, DateType,
+   FloatType, IntegerType, ShortType, StringType)
 
 
 smb_schema = StructType([
