@@ -17,7 +17,31 @@ APP_NAME = "ru_smb_companies"
 
 app = typer.Typer(
     help="Create dataset of Russian SMB companies (and individuals) based on Federal Tax Service's open data",
-    rich_markup_mode="markdown",
+    rich_markup_mode="markdown"
+)
+download_app = typer.Typer()
+extract_app = typer.Typer()
+aggregate_app = typer.Typer()
+app.add_typer(
+    download_app,
+    name="download",
+    help="Download source dataset(s) from FTS open data server (stage 1)",
+    rich_help_panel="Stages",
+    no_args_is_help=True
+)
+app.add_typer(
+    extract_app,
+    name="extract",
+    help="Extract data from downloaded source datasets (stage 2)",
+    rich_help_panel="Stages",
+    no_args_is_help=True
+)
+app.add_typer(
+    aggregate_app,
+    name="aggregate",
+    help="Aggregate extracted data into a single CSV file removing duplicates (stage 3)",
+    rich_help_panel="Stages",
+    no_args_is_help=True
 )
 
 default_config = dict(storage="local", token="", num_workers=1, chunksize=16)
@@ -36,15 +60,25 @@ except:
 
 def get_default_path(
     stage_name: str,
-    source_dataset: str,
+    source_dataset: Optional[str] = None,
     filename: Optional[str] = None,
-) -> str:
+) -> pathlib.Path:
+    path = pathlib.Path("ru-smb-data") / stage_name
+    if source_dataset is not None:
+        path = path / source_dataset
     if filename is not None:
-        path = pathlib.Path("ru-smb-data") / stage_name / source_dataset / filename
-    else:
-        path = pathlib.Path("ru-smb-data") / stage_name / source_dataset
+        path = path / filename
 
-    return str(path)
+    return path
+
+
+def get_downloader(app_config: dict) -> Downloader:
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+    if storage in ("ydisk", ) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    return Downloader(token)
 
 
 class StageNames(enum.Enum):
@@ -66,24 +100,17 @@ class SourceDatasets(enum.Enum):
     empl = "empl"
 
 
-@app.command(rich_help_panel="Stages")
-def download(
-    source_dataset: Annotated[
-        Optional[SourceDatasets],
-        typer.Option(
-            help="Label of the source dataset in FTS open data: **smb** is small&medium-sized businesses registry, **revexp** is data on revenue and expenditure of organizations, **empl** is data on conut of employees of organizations. If option is not specified, than all three datasets are downloaded",
-            show_default="all three source datasets"
-        )
-    ] = None,
+@download_app.command("all", rich_help_panel="Source dataset(s)")
+def download_all(
     download_dir: Annotated[
-        Optional[str],
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to the directory to store downloaded files. If not specified, the default path *ru-smb-data/download/{source_dataset}* is used. If source_dataset is not specified, the default path is always used, even if *download_dir* is set"
+            help="Path to the directory to store downloaded files. Sub-directories *smb*, *revexp*, and *empl* for respective datasets will be created automatically"
         )
-    ] = None
+    ] = get_default_path(StageNames.download.value)
 ):
     """
-    Download source dataset(s) from FTS open data server (stage 1)
+    Download all three source dataset(s)
     """
     storage = app_config.get("storage")
     token = app_config.get("token")
@@ -92,52 +119,149 @@ def download(
 
     d = Downloader(token)
 
-    if source_dataset is None:
-        for source_dataset in SourceDatasets:
-            download_dir = get_default_path(
-                StageNames.download.value, source_dataset.value)
-            d(storage, source_dataset.value, download_dir)
-    else:
-        download_dir = download_dir or get_default_path(StageNames.download.value, source_dataset.value)
-        d(storage, source_dataset.value, download_dir)
+    for source_dataset in SourceDatasets:
+        path = download_dir / source_dataset.value
+        d(storage, source_dataset.value, str(path))
 
 
-@app.command(rich_help_panel="Stages")
-def extract(
+@download_app.command("smb", rich_help_panel="Source dataset(s)")
+def download_smb(
+    download_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to the directory to store downloaded files"
+        )
+    ] = get_default_path(StageNames.download.value, SourceDatasets.smb.value)
+):
+    """
+    Download **s**mall&**m**edium-sized **b**usinesses registry
+    """
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+    if storage in ("ydisk", ) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    d = Downloader(token)
+    d(storage, SourceDatasets.smb.value, str(download_dir))
+
+
+@download_app.command("revexp", rich_help_panel="Source dataset(s)")
+def download_revexp(
+    download_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to the directory to store downloaded files"
+        )
+    ] = get_default_path(StageNames.download.value, SourceDatasets.revexp.value)
+):
+    """
+    Download data on **rev**enue and **exp**enditure of companies
+    """
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+    if storage in ("ydisk", ) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    d = Downloader(token)
+    d(storage, SourceDatasets.revexp.value, str(download_dir))
+
+
+@download_app.command("empl", rich_help_panel="Source dataset(s)")
+def download_empl(
+    download_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to the directory to store downloaded files"
+        )
+    ] = get_default_path(StageNames.download.value, SourceDatasets.empl.value)
+):
+    """
+    Download data on number of **empl**oyees in companies
+    """
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+    if storage in ("ydisk", ) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    d = Downloader(token)
+    d(storage, SourceDatasets.empl.value, str(download_dir))
+
+
+@extract_app.command("all", rich_help_panel="Source dataset(s)")
+def extract_all(
     in_dir: Annotated[
-        Optional[str],
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to downloaded source files. Usually the same as *download_dir* on download stage. If not specified, default auto-generated path *ru-smb-data/download/{source_dataset}* is used. If *source_dataset* option (see below) is not specified, default auto-generated path is always used",
-            show_default="auto-generated in form ru-smb-data/download/{source_dataset}"
+            help="Path to downloaded source files. Usually the same as *download_dir* on download stage. Expected to contain *smb*, *revexp*, *empl* sub-folders"
         )
-    ] = None,
+    ] = get_default_path(StageNames.download.value),
     out_dir: Annotated[
-        Optional[str],
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to save extracted CSV files. If not specified, auto-generated path *ru-smb-data/extract/{source_dataset}* is used. If *source_dataset* option (see below) is not specified, default auto-generated path is always used",
-            show_default="auto-generated in form ru-smb-data/extract/{source_dataset}"
+            help="Path to save extracted CSV files. Sub-folders *smb*, *revexp*, *empl* for respective datasets will be created automatically"
         )
-    ] = None,
-    source_dataset: Annotated[
-        Optional[SourceDatasets],
-        typer.Option(
-            help="Label of the source dataset in FTS open data: **smb** is small&medium-sized businesses registry, **revexp** is data on revenue and expenditure of organizations, **empl** is data on conut of employees of organizations. If option is not specified, than all three datasets are downloaded",
-            show_default="all three source datasets"
-        )
-    ] = None,
+    ] = get_default_path(StageNames.extract.value),
     clear: Annotated[
         bool, typer.Option(help="Clear *out_dir* (see above) before processing")
     ] = False,
     ac: Annotated[
         Optional[List[str]],
         typer.Option(
-            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled. If *source_dataset* (see above) is *revexp* or *empl*, filtering is not performed",
+            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
             show_default="no filtering by activity code(s)"
         )
     ] = None,
 ):
     """
-    Extract data from downloaded source datasets (*zip* archives) to *csv* files,
+    Extract data from all three downloaded source datasets
+    """
+    num_workers = app_config.get("num_workers")
+    chunksize = app_config.get("chunksize")
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+
+    if storage in ("ydisk",) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    e = Extractor(storage, num_workers, chunksize, token)
+    for source_dataset in SourceDatasets:
+        args = dict(
+            in_dir=str(in_dir / source_dataset.value),
+            out_dir=str(out_dir / source_dataset.value),
+            mode=source_dataset.value,
+            clear=clear,
+            activity_codes=ac,
+        )
+        e(**args)
+
+
+@extract_app.command("smb", rich_help_panel="Source dataset(s)")
+def extract_smb(
+    in_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to downloaded source files. Usually the same as *download_dir* on download stage"
+        )
+    ] = get_default_path(StageNames.download.value, SourceDatasets.smb.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to save extracted CSV files"
+        )
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.smb.value),
+    clear: Annotated[
+        bool, typer.Option(help="Clear *out_dir* (see above) before processing")
+    ] = False,
+    ac: Annotated[
+        Optional[List[str]],
+        typer.Option(
+            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
+            show_default="no filtering by activity code(s)"
+        )
+    ] = None,
+):
+    """
+    Extract data from downloaded *zip* archives of SMB registry to *csv* files,
     optionally filtering by activity code (stage 2)
     """
     num_workers = app_config.get("num_workers")
@@ -149,69 +273,188 @@ def extract(
         raise RuntimeError("Token is required to use ydisk storage")
 
     e = Extractor(storage, num_workers, chunksize, token)
-    if source_dataset is None:
-        for source_dataset in SourceDatasets:
-            in_dir = get_default_path(StageNames.download.value, source_dataset.value)
-            out_dir = get_default_path(StageNames.extract.value, source_dataset.value)
-            e(in_dir, out_dir, source_dataset.value, clear, ac)
-    else:
-        in_dir = in_dir or get_default_path(StageNames.download.value, source_dataset.value)
-        out_dir = out_dir or get_default_path(StageNames.extract.value, source_dataset.value)
-        e(in_dir, out_dir, source_dataset.value, clear, ac)
+    e(str(in_dir), str(out_dir), SourceDatasets.smb.value, clear, ac)
 
 
-@app.command(rich_help_panel="Stages")
-def aggregate(
+@extract_app.command("revexp", rich_help_panel="Source dataset(s)")
+def extract_revexp(
     in_dir: Annotated[
-        Optional[str],
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage. If not specified, default auto-generated path *ru-smb-data/extract/{source_dataset}* is used. If *source_dataset* option (see below) is not specified, default auto-generated path is always used",
-            show_default="auto-generated in form ru-smb-data/extract/{source_dataset}"
+            help="Path to downloaded source files. Usually the same as *download_dir* on download stage"
         )
-    ] = None,
-    out_file: Annotated[
-        Optional[str],
+    ] = get_default_path(StageNames.download.value, SourceDatasets.revexp.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to aggregated CSV files (including file name with extension). If not specified, default auto-generated path *ru-smb-data/aggregate/{source_dataset}/agg.csv* is used. If *source_dataset* option (see below) is not specified, default auto-generated path is always used",
-            show_default="auto-generated in form ru-smb-data/aggregate/{source_dataset}/agg.csv"
+            help="Path to save extracted CSV files"
         )
-    ] = None,
-    source_dataset: Annotated[
-        SourceDatasets,
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.revexp.value),
+    clear: Annotated[
+        bool, typer.Option(help="Clear *out_dir* (see above) before processing")
+    ] = False
+):
+    """
+    Extract data from downloaded *zip* archives of revexp data to *csv* files
+    """
+    num_workers = app_config.get("num_workers")
+    chunksize = app_config.get("chunksize")
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+
+    if storage in ("ydisk",) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    e = Extractor(storage, num_workers, chunksize, token)
+    e(str(in_dir), str(out_dir), SourceDatasets.revexp.value, clear)
+
+
+@extract_app.command("empl", rich_help_panel="Source dataset(s)")
+def extract_empl(
+    in_dir: Annotated[
+        Optional[pathlib.Path],
         typer.Option(
-            help="Label of the source dataset in FTS open data: **smb** is small&medium-sized businesses registry, **revexp** is data on revenue and expenditure of organizations, **empl** is data on conut of employees of organizations. If option is not specified, than all three datasets are downloaded",
-            show_default="all three source datasets"
+            help="Path to downloaded source files. Usually the same as *download_dir* on download stage"
         )
-    ] = None,
+    ] = get_default_path(StageNames.download.value, SourceDatasets.empl.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to save extracted CSV files"
+        )
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.empl.value),
+    clear: Annotated[
+        bool, typer.Option(help="Clear *out_dir* (see above) before processing")
+    ] = False
+):
+    """
+    Extract data from downloaded *zip* archives of empl data to *csv* files
+    """
+    num_workers = app_config.get("num_workers")
+    chunksize = app_config.get("chunksize")
+    storage = app_config.get("storage")
+    token = app_config.get("token")
+
+    if storage in ("ydisk",) and token is None:
+        raise RuntimeError("Token is required to use ydisk storage")
+
+    e = Extractor(storage, num_workers, chunksize, token)
+    e(str(in_dir), str(out_dir), SourceDatasets.empl.value, clear)
+
+
+@aggregate_app.command("all", rich_help_panel="Source dataset(s)")
+def aggregate_all(
+    in_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage. Expected to contain *smb*, *revexp*, *empl* sub-folders"
+        )
+    ] = get_default_path(StageNames.extract.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to save aggregated CSV files. Sub-folders *smb*, *revexp*, *empl* for respective datasets will be created automatically"
+        )
+    ] = get_default_path(StageNames.aggregate.value)
+):
+    """
+    Aggregate all three source datasets
+    """
+    a = Aggregator()
+    for source_dataset in SourceDatasets:
+        args = dict(
+            in_dir=str(in_dir / source_dataset.value),
+            out_file=str(out_dir / source_dataset.value / "agg.csv"),
+            mode=source_dataset.value,
+        )
+        if source_dataset.value in ("revexp", "empl"):
+            args["smb_data_file"] = str(get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv"))
+
+        a(**args)
+
+
+@aggregate_app.command("smb", rich_help_panel="Source dataset(s)")
+def aggregate_smb(
+    in_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage"
+        )
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.smb.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to save aggregated CSV files"
+        )
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value)
+):
+    """
+    Aggregate SMB dataset
+    """
+    a = Aggregator()
+    a(str(in_dir), str(out_file), SourceDatasets.smb.value)
+
+
+@aggregate_app.command("revexp", rich_help_panel="Source dataset(s)")
+def aggregate_revexp(
+    in_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage"
+        )
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.revexp.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to save aggregated CSV files"
+        )
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value),
     smb_data_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="If *source_dataset* (see above) is *revexp* or *empl*, this option sets the path to **already processed smb file** that is used to filter aggregated values in revexp or empl file. Apparently, this file must exist. If *source_dataset* is *smb*, the option has no effect",
-            show_default="auto-generated in form ru-smb-data/aggregate/smb/agg.csv",
+            help="Path to **already processed smb file** that is used to filter aggregated values in revexp or empl file",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = None
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
 ):
     """
-    Aggregate extracted CSV files into a single CSV file removing duplicates (stage 3)
+    Aggregate revexp dataset
     """
     a = Aggregator()
-    if source_dataset is None:
-        for source_dataset in SourceDatasets:
-            in_dir = get_default_path(StageNames.extract.value, source_dataset.value)
-            out_file = get_default_path(StageNames.aggregate.value, source_dataset.value, "agg.csv")
-            if source_dataset.value in ("revexp", "empl"):
-                smb_data_file = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
-                a(in_dir, out_file, source_dataset.value, smb_data_file)
-            else:
-                a(in_dir, out_file, source_dataset.value)
-    else:
-        in_dir = in_dir or get_default_path(StageNames.extract.value, source_dataset.value)
-        out_file = out_file or get_default_path(StageNames.aggregate.value, source_dataset.value, "agg.csv")
-        smb_data_file = smb_data_file or get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
-        a(in_dir, out_file, source_dataset.value, str(smb_data_file))
+    a(str(in_dir), str(out_file), SourceDatasets.revexp.value, str(smb_data_file))
+
+
+@aggregate_app.command("empl", rich_help_panel="Source dataset(s)")
+def aggregate_empl(
+    in_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage"
+        )
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.empl.value),
+    out_dir: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to save aggregated CSV files"
+        )
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value),
+    smb_data_file: Annotated[
+        Optional[pathlib.Path],
+        typer.Option(
+            help="Path to **already processed smb file** that is used to filter aggregated values in revexp or empl file",
+            exists=True,
+            file_okay=True,
+            readable=True
+        )
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+):
+    """
+    Aggregate empl dataset
+    """
+    a = Aggregator()
+    a(str(in_dir), str(out_file), SourceDatasets.empl.value, str(smb_data_file))
 
 
 @app.command(rich_help_panel="Stages")
@@ -219,28 +462,24 @@ def georeference(
     in_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to aggregated CSV files. Usually the same as *out_file* on aggregate stage with *--source-dataset smb*. If not specified, default auto-generated path *ru-smb-data/aggregate/smb/agg.csv* is used",
-            show_default="auto-generated in form ru-smb-data/aggregate/smb/agg.csv",
+            help="Path to aggregated CSV files. Usually the same as *out_file* on aggregate smb stage",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = None,
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv"),
     out_file: Annotated[
-        Optional[str],
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to save georeferenced CSV files.If not specified, default auto-generated path *ru-smb-data/georeference/smb/georeferenced.csv* is used",
-            show_default="auto-generated in form ru-smb-data/georeference/smb/georeferenced.csv"
+            help="Path to save georeferenced CSV file"
         )
-    ] = None
+    ] = get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
 ):
     """
     Georeference SMB aggregated data (stage 4)
     """
     g = Georeferencer()
-    in_file = in_file or get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
-    out_file = out_file or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
-    g(str(in_file), out_file)
+    g(str(in_file), str(out_file))
 
 
 @app.command(rich_help_panel="Stages")
@@ -248,49 +487,42 @@ def panelize(
     smb_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to georeferenced CSV files. Usually the same as *out_file* on georeference stage. If not specified, default auto-generated path *ru-smb-data/georeference/smb/georeferenced.csv* is used",
-            show_default="auto-generated in form ru-smb-data/georeference/smb/georeferenced.csv",
+            help="Path to georeferenced CSV file. Usually the same as *out_file* on georeference stage",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = None,
+    ] = get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv"),
     out_file: Annotated[
-        Optional[str],
+        Optional[pathlib.Path],
         typer.Option(
-            help="Path to save panel CSV file.If not specified, default auto-generated path *ru-smb-data/panelize/smb/panel.csv* is used",
-            show_default="auto-generated in form ru-smb-data/panelize/smb/panel.csv"
+            help="Path to save panel CSV file"
         )
-    ] = None,
+    ] = get_default_path(StageNames.panelize.value, "panel.csv"),
     revexp_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to aggregated CSV revexp file. Usually the same as *out_file* on aggregate stage with *--source-dataset revexp*. If not specified, default auto-generated path *ru-smb-data/aggregate/revexp/agg.csv* is used",
-            show_default="auto-generated in form ru-smb-data/aggregate/revexp/agg.csv",
+            help="Path to aggregated CSV revexp file. Usually the same as *out_file* on aggregate revexp stage",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = None,
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value, "agg.csv"),
     empl_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to aggregated CSV empl file. Usually the same as *out_file* on aggregate stage with *--source-dataset empl*. If not specified, default auto-generated path *ru-smb-data/aggregate/empl/agg.csv* is used",
-            show_default="auto-generated in form ru-smb-data/aggregate/empl/agg.csv",
+            help="Path to aggregated CSV empl file. Usually the same as *out_file* on aggregate empl stage",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = None,
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv"),
 ):
     """
     Make panel dataset based on georeferenced SMB data and aggregated revexp and empl tables (stage 5)
     """
-    smb_file = smb_file or get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
-    revexp_file = revexp_file or get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value, "agg.csv")
-    empl_file = empl_file or get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv")
     p = Panelizer()
-    p(str(smb_file), out_file, str(revexp_file), str(empl_file))
+    p(str(smb_file), str(out_file), str(revexp_file), str(empl_file))
 
 
 @app.command(rich_help_panel="Configuration", no_args_is_help=True)
@@ -341,9 +573,8 @@ def config(
     print("Configuration updated")
 
 
-@app.callback(rich_help_panel="Magic", invoke_without_command=True)
+@app.command(rich_help_panel="Magic command")
 def process(
-    ctx: typer.Context,
     download: Annotated[
         bool,
         typer.Option(
@@ -353,7 +584,7 @@ def process(
     ac: Annotated[
         Optional[List[str]],
         typer.Option(
-            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled. If *source_dataset* (see above) is *revexp* or *empl*, filtering is not performed",
+            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
             show_default="no filtering by activity code(s)"
         )
     ] = None
@@ -361,14 +592,11 @@ def process(
     """
     Process the source data with this single command
     """
-    if ctx.invoked_subcommand is not None:
-        return
-
     if download:
-        download()
+        download_all()
 
-    extract(ac=ac)
-    aggregate()
+    extract_all(ac=ac)
+    aggregate_all()
     georeference()
     panelize()
 
