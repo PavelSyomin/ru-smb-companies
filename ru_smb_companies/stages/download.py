@@ -7,6 +7,8 @@ from bs4 import BeautifulSoup
 import requests
 import tqdm
 
+from ..utils.enums import SourceDatasets, Storages
+
 
 class Downloader:
     API_ENDPOINTS = {
@@ -15,37 +17,43 @@ class Downloader:
     }
     HOST = "https://cloud-api.yandex.net/v1/"
     OPENDATA_URLS = {
-        "smb": "https://www.nalog.gov.ru/opendata/7707329152-rsmp/",
-        "revexp": "https://www.nalog.gov.ru/opendata/7707329152-revexp/",
-        "empl": "https://www.nalog.gov.ru/opendata/7707329152-sshr2019/",
+        SourceDatasets.smb.value: "https://www.nalog.gov.ru/opendata/7707329152-rsmp/",
+        SourceDatasets.revexp.value: "https://www.nalog.gov.ru/opendata/7707329152-revexp/",
+        SourceDatasets.empl.value: "https://www.nalog.gov.ru/opendata/7707329152-sshr2019/",
     }
-    STORAGES = ("local", "ydisk")
+    STORAGES = [s.value for s in Storages]
     YDISK_DOWNLOAD_TIMEOUT = 60
 
-    def __init__(self, token: Optional[str] = None):
-        self._token = token
-
-    def __call__(self, storage: str, mode: str, download_dir: Optional[str] = None):
+    def __init__(self, storage: str = Storages.local.value,
+                 token: Optional[str] = None):
         if storage not in self.STORAGES:
             raise RuntimeError(
                 f"Unknown storage {storage}, expected one of {self.STORAGES}")
 
-        if mode not in self.OPENDATA_URLS:
-            raise RuntimeError(f"Unknown mode {mode}, expected one of {list(self.OPENDATA_URLS.keys())}")
+        if storage in ("ydisk",) and token is None:
+            raise RuntimeError("Token is required to use ydisk storage")
 
-        data_urls = self._get_data_urls(mode)
+        self._token = token
+        self._storage = storage
+
+    def __call__(self, source_dataset: str, download_dir: Optional[str] = None):
+        if source_dataset not in self.OPENDATA_URLS:
+            raise RuntimeError(f"Unknown source dataset {source_dataset}, "
+                f"expected one of {list(self.OPENDATA_URLS.keys())}")
+
+        data_urls = self._get_data_urls(source_dataset)
 
         if download_dir is None:
-            download_dir = self._get_default_download_dir(storage, mode)
-        self._create_download_dir(download_dir, storage)
+            download_dir = self._get_default_download_dir(source_dataset)
+        self._create_download_dir(download_dir)
 
-        if storage == "local":
+        if self._storage == "local":
             self._download_to_local(data_urls, download_dir)
-        elif storage == "ydisk":
+        elif self._storage == "ydisk":
             self._download_to_ydisk(data_urls, download_dir)
 
-    def _create_download_dir(self, download_dir: str, storage: str):
-        if storage == "local":
+    def _create_download_dir(self, download_dir: str):
+        if self._storage == "local":
             path = pathlib.Path(download_dir)
             if not path.exists():
                 path.mkdir(parents=True)
@@ -61,14 +69,11 @@ class Downloader:
             "Content-Type": "application/json",
         }
 
-    def _get_default_download_dir(self, storage: str, mode: str) -> str:
-        if storage == "local":
-            return f"data/raw/{mode}"
-        elif storage == "ydisk":
-            return f"/ru-smb-data/{mode}"
+    def _get_default_download_dir(self, source_dataset: str) -> str:
+        return f"ru-smb-data/download/{source_dataset}"
 
-    def _get_data_urls(self, mode: str) -> List[str]:
-        url = self.OPENDATA_URLS[mode]
+    def _get_data_urls(self, source_dataset: str) -> List[str]:
+        url = self.OPENDATA_URLS[source_dataset]
 
         # Get the page source
         print(f"Scraping {url}")
