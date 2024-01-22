@@ -1,7 +1,6 @@
 from collections import namedtuple
 import functools
 import json
-import logging
 import multiprocessing
 import pathlib
 import string
@@ -21,9 +20,6 @@ from tqdm import tqdm
 from ..assets import get_asset_path
 from ..utils.elements import elements
 from ..utils.enums import SourceDatasets, Storages
-
-
-logging.basicConfig(encoding='utf-8', level=logging.INFO)
 
 
 def _make_dataframe(item, elements, target_codes=None, debug=True):
@@ -170,7 +166,7 @@ class Extractor:
                     total=len(archive)
                 ):
                     if df is None:
-                        logging.warning("Empty df returned")
+                        print("Empty df returned")
                         continue
 
                     if out_file.exists():
@@ -317,10 +313,10 @@ class Extractor:
         if source_dataset not in (SourceDatasets.smb.value, ):
             return None
 
-        logging.info("Getting filters by activity code(s)")
+        print("Getting filters by activity code(s)")
 
         classifier = pd.read_csv(self.ACTIVITY_CODES_CLASSIFIER)
-        logging.info(
+        print(
             f"Found activity codes classifier at {self.ACTIVITY_CODES_CLASSIFIER}"
         )
         codes = []
@@ -337,19 +333,19 @@ class Extractor:
                     [[np.nan, code, np.nan]],
                     columns=classifier.columns
                 )
-                logging.warning(f"Code {code} not found in the classifier and will be used as is")
+                print(f"Code {code} not found in the classifier and will be used as is")
 
             codes.append(inner_codes)
 
         if len(codes) == 0:
-            logging.info("No filtering by activity codes, using all data")
+            print("No filtering by activity codes, using all data")
             codes = None
         else:
             codes = pd.concat(codes)
             codes = codes.loc[codes["code"] != ""]
 
-            logging.info("Activity codes to filter")
-            logging.info(codes)
+            print("Activity codes to filter")
+            print(codes)
 
             codes = list(codes["code"])
 
