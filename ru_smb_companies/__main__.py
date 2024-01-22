@@ -501,9 +501,9 @@ def config(
         return
 
     app_config["token"] = ydisk_token
-    app_config["num_workers"] = extractor_num_workers
-    app_config["chunksize"] = extractor_chunksize
-    app_config["storage"] = storage
+    app_config["num_workers"] = num_workers
+    app_config["chunksize"] = chunksize
+    app_config["storage"] = storage.value
 
     with open(app_config_path, "w") as f:
         json.dump(app_config, f)
