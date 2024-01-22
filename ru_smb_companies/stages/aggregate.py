@@ -6,19 +6,10 @@ from typing import List, Optional
 from pyspark.sql import DataFrame, SparkSession, Window
 from pyspark.sql.functions import (coalesce, desc, first, last, lead,
     lower, lpad, row_number, upper, year)
+from pyspark.sql.types import StructType
 
+from ..utils.enums import SourceDatasets, Storages
 from ..utils.spark_schemas import smb_schema, revexp_schema, empl_schema
-
-
-def get_input_files(in_dir: str) -> List[str]:
-    path = pathlib.Path(in_dir)
-    if not path.exists():
-        print(f"Input path {in_dir} not found")
-        return []
-
-    csv_files = [str(fn) for fn in path.glob("data-*.csv")]
-
-    return csv_files
 
 
 def _write(df: DataFrame, out_file: str):
@@ -47,22 +38,27 @@ class Aggregator:
         self._session.stop()
 
     def __call__(self, in_dir: str, out_file: str,
-                 mode: str, smb_data_file: Optional[str] = None):
+                 source_dataset: str, smb_data_file: Optional[str] = None):
         """Execute the aggregation of all datasets"""
-        input_files = get_input_files(in_dir)
-        if len(input_files) == 0:
-            print("Input directory does not contain extracted CSV files")
-            return
-
-        if mode == "smb":
+        if source_dataset == SourceDatasets.smb.value:
             self._process_smb_registry(input_files, out_file)
-        elif mode == "revexp":
+        elif source_dataset == SourceDatasets.revexp.value:
             self._process_revexp_data(input_files, out_file, smb_data_file)
-        elif mode == "empl":
+        elif source_dataset == SourceDatasets.empl.value:
             self._process_empl_data(input_files, out_file, smb_data_file)
         else:
             raise RuntimeError(
-                f"Unsupported mode {mode}, expected one of {self.MODES}")
+                f"Unsupported source dataset {source_dataset}, "
+                f"expected one of {[sd.value for sd in SourceDatasets]}"
+            )
+
+    def _filter_by_tins(self, table: DataFrame, smb_data_file: str) -> DataFrame:
+        smb_data = self._session.read.options(header=True, escape='"').csv(smb_data_file)
+        tins = smb_data.filter("kind == 1").select("tin")
+
+        table = table.join(tins, on="tin", how="leftsemi")
+
+        return table
 
     def _init_spark(self):
         """Spark configuration and initialization"""
@@ -80,12 +76,9 @@ class Aggregator:
 
     def _process_smb_registry(self, input_files: List[str], out_file: str):
         """Process CSV files extacted from SMB registry archives"""
-        data = self._session.read.options(
-            header=True, dateFormat="dd.MM.yyyy", escape='"'
-        ).schema(smb_schema).csv(input_files)
-
-        initial_count = data.count()
-        print(f"Source CSV files contain {initial_count} rows")
+        data = self._read_input_files(in_dir, smb_schema)
+        if data is None:
+            return
 
         cols_to_check_for_duplicates = [
             "kind", "category", "tin", "reg_number",
@@ -184,11 +177,9 @@ class Aggregator:
     def _process_revexp_data(self, input_files: List[str], out_file: str,
                              smb_data_file: Optional[str]):
         """Combine revexp CSV files into a single file filtering by TINs"""
-        data = self._session.read.options(
-            header=True, dateFormat="dd.MM.yyyy"
-        ).schema(revexp_schema).csv(input_files)
-
-        print(f"Revexp source CSV files contain {data.count()} rows")
+        data = self._read_input_files(in_dir, revexp_schema)
+        if data is None:
+            return
 
         window = Window.partitionBy("tin", "data_date").orderBy(desc("doc_date"))
 
@@ -217,10 +208,9 @@ class Aggregator:
     def _process_empl_data(self, input_files: List[str], out_file: str,
                            smb_data_file: Optional[str]):
         """Combine employees CSV files into a single file filtering by TINs"""
-        data = self._session.read.options(
-            header=True, dateFormat="dd.MM.yyyy"
-        ).schema(empl_schema).csv(input_files)
-        print(f"Employees source CSV files contain {data.count()} rows")
+        data = self._read_input_files(in_dir, empl_schema)
+        if data is None:
+            return
 
         window = Window.partitionBy("tin", "data_date").orderBy(desc("doc_date"))
 
@@ -246,10 +236,21 @@ class Aggregator:
 
         _write(table, out_file)
 
-    def _filter_by_tins(self, table: DataFrame, smb_data_file: str) -> DataFrame:
-        smb_data = self._session.read.options(header=True, escape='"').csv(smb_data_file)
-        tins = smb_data.filter("kind == 1").select("tin")
+    def _read_input_files(self, in_dir: str, schema: StructType) -> DataFrame:
+        path = pathlib.Path(in_dir)
+        if not path.exists():
+            print(f"Input path {in_dir} not found")
+            return None
 
-        table = table.join(tins, on="tin", how="leftsemi")
+        input_files = [str(fn) for fn in path.glob("data-*.csv")]
+        if len(input_files) == 0:
+            print("Input directory does not contain extracted CSV files")
+            return None
 
-        return table
+        data = self._session.read.options(
+            header=True, dateFormat="dd.MM.yyyy", escape='"'
+        ).schema(schema).csv(input_files)
+
+        print(f"Source CSV files contain {data.count()} rows")
+
+        return data
