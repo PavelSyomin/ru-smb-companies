@@ -41,11 +41,11 @@ class Aggregator:
                  source_dataset: str, smb_data_file: Optional[str] = None):
         """Execute the aggregation of all datasets"""
         if source_dataset == SourceDatasets.smb.value:
-            self._process_smb_registry(input_files, out_file)
+            self._process_smb_registry(in_dir, out_file)
         elif source_dataset == SourceDatasets.revexp.value:
-            self._process_revexp_data(input_files, out_file, smb_data_file)
+            self._process_revexp_data(in_dir, out_file, smb_data_file)
         elif source_dataset == SourceDatasets.empl.value:
-            self._process_empl_data(input_files, out_file, smb_data_file)
+            self._process_empl_data(in_dir, out_file, smb_data_file)
         else:
             raise RuntimeError(
                 f"Unsupported source dataset {source_dataset}, "
@@ -74,7 +74,7 @@ class Aggregator:
         web_url = self._session.sparkContext.uiWebUrl
         print(f"Spark session have started. You can monitor it at {web_url}")
 
-    def _process_smb_registry(self, input_files: List[str], out_file: str):
+    def _process_smb_registry(self, in_dir: str, out_file: str):
         """Process CSV files extacted from SMB registry archives"""
         data = self._read_input_files(in_dir, smb_schema)
         if data is None:
@@ -174,7 +174,7 @@ class Aggregator:
 
         _write(table, out_file)
 
-    def _process_revexp_data(self, input_files: List[str], out_file: str,
+    def _process_revexp_data(self, in_dir: str, out_file: str,
                              smb_data_file: Optional[str]):
         """Combine revexp CSV files into a single file filtering by TINs"""
         data = self._read_input_files(in_dir, revexp_schema)
@@ -205,7 +205,7 @@ class Aggregator:
 
         _write(table, out_file)
 
-    def _process_empl_data(self, input_files: List[str], out_file: str,
+    def _process_empl_data(self, in_dir: str, out_file: str,
                            smb_data_file: Optional[str]):
         """Combine employees CSV files into a single file filtering by TINs"""
         data = self._read_input_files(in_dir, empl_schema)
