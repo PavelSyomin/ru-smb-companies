@@ -80,6 +80,8 @@ class Georeferencer:
         settlements = self._get_settlements_standard()
 
         mapping = self._georeference(addresses, cities, settlements)
+        addr_with_norm_regions = self._normalize_region_names(addresses)
+        addr_with_norm_regions.drop_duplicates().to_csv("anr.csv")
         data = self._remove_raw_addresses(data)
 
         data = data.merge(mapping, how="left")
@@ -91,6 +93,17 @@ class Georeferencer:
         data.drop(columns=["geo_id", "type"], inplace=True)
 
         data = self._normalize_region_names(data)
+
+        initial_count = len(data)
+        data = data.merge(
+            addr_with_norm_regions[["id", "region"]],
+            how="left",
+            on="id")
+        assert len(data) == initial_count
+        data["region_x"] = data["region_x"].combine_first(data["region_y"])
+        data["region"] = data["region_x"]
+        data.drop(columns=["region_y"], inplace=True)
+
         data = self._remove_duplicates(data)
 
         self._save(data, out_file)
@@ -128,7 +141,7 @@ class Georeferencer:
             self, addresses: pd.DataFrame) -> pd.DataFrame:
         for option in ("region", "district", "city", "settlement"):
             target_col = f"{option}_type"
-            self._expand_abbrs(addresses, target_col)
+            addresses = self._expand_abbrs(addresses, target_col)
 
             parts = [f"{option}_name", f"{option}_type"]
             addresses[option] = addresses[parts].apply(
