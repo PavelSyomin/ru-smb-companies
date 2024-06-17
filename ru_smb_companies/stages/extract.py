@@ -302,10 +302,10 @@ class Extractor:
         if self._storage == Storages.local.value:
             return
 
-        if not local_file.exists():
+        if not path.exists():
             return
 
-        local_file.unlink()
+        path.unlink()
         print(f"Local copy of downloaded file at {path} removed")
 
     def _get_activity_codes(
