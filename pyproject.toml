@@ -1,0 +1,28 @@
+[tool.poetry]
+name = "ru-smb-companies"
+version = "0.4.0"
+description = "A command-line tool to get a georeferenced dataset of Russian small and medium-sized businesses using open data of Federal Tax Service"
+authors = ["Pavel Syomin <pas.ntg@gmail.com>"]
+readme = "README.md"
+packages = [{include = "ru_smb_companies"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+typer = {extras = ["all"], version = "^0.9.0"}
+pyspark = "^3.4.1"
+pandas = "^2.2.0"
+numpy = "^1.26.3"
+requests = "^2.31.0"
+beautifulsoup4 = "^4.12.3"
+tqdm = "^4.66.1"
+lxml = "^5.1.0"
+fuzzywuzzy = "^0.18.0"
+python-levenshtein = "^0.23.0"
+
+[tool.poetry.scripts]
+ru-smb-companies = "ru_smb_companies.main:app"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 
-Region = namedtuple("Region", ["code", "name", "short_name"])
+Region = namedtuple("Region", ["code", "name", "short_name", "iso_code"])
 
 
 class Regions:
@@ -17,7 +17,7 @@ class Regions:
     )
 
     def __init__(self, lookup_path: str = "assets/regions.csv"):
-        self._lookup_table = pd.read_csv(lookup_path)
+        self._lookup_table = pd.read_csv(lookup_path, dtype=str)
         self._cache = {}
         self._index_by_code = {}
         self._index_by_name = {}
@@ -29,8 +29,10 @@ class Regions:
             index = row.Index
             name = row.name
             short_name = row.short_name
+            iso_code = row.iso_code
 
-            region = Region(code=code, name=name, short_name=short_name)
+            region = Region(
+                code=code, name=name, short_name=short_name, iso_code=row.iso_code)
             self._regions[index] = region
 
             self._index_by_code[int(code)] = index
@@ -92,7 +94,7 @@ class Regions:
         raise KeyError(f"Region with name {orig_key} not found")
 
     def get(
-        self, key: str, default: Any = Region(np.nan, np.nan, np.nan)
+        self, key: str, default: Any = Region(np.nan, np.nan, np.nan, np.nan)
     ) -> Union[Region, Any]:
         try:
             value = self[key]

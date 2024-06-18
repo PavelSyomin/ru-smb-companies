@@ -80,8 +80,6 @@ class Georeferencer:
         settlements = self._get_settlements_standard()
 
         mapping = self._georeference(addresses, cities, settlements)
-        addr_with_norm_regions = self._normalize_region_names(addresses)
-        addr_with_norm_regions.drop_duplicates().to_csv("anr.csv")
         data = self._remove_raw_addresses(data)
 
         data = data.merge(mapping, how="left")
@@ -92,17 +90,20 @@ class Georeferencer:
         assert len(data) == initial_count
         data.drop(columns=["geo_id", "type"], inplace=True)
 
-        data = self._normalize_region_names(data)
-
         initial_count = len(data)
         data = data.merge(
-            addr_with_norm_regions[["id", "region"]],
+            addresses[["id", "region"]],
             how="left",
             on="id")
         assert len(data) == initial_count
-        data["region_x"] = data["region_x"].combine_first(data["region_y"])
-        data["region"] = data["region_x"]
-        data.drop(columns=["region_y"], inplace=True)
+        data["region"] = data["region_x"].combine_first(data["region_y"])
+        data.drop(
+            columns=["region_x", "region_y", "region_code"],
+            inplace=True
+        )
+
+        data = self._normalize_region_names(data)
+        data = self._process_federal_cities(data)
 
         data = self._remove_duplicates(data)
 
@@ -172,12 +173,21 @@ class Georeferencer:
     def _normalize_region_names(self, data: pd.DataFrame) -> pd.DataFrame:
         initial_count = len(data)
         regions = data["region"].dropna().unique()
+
+        regions_norm = []
+        regions_codes = []
+        regions_iso_codes = []
+        for region in regions:
+            region_info = self._regions.get(region)
+            regions_norm.append(region_info.name)
+            regions_codes.append(region_info.code)
+            regions_iso_codes.append(region_info.iso_code)
+
         regions_norm = pd.DataFrame({
             "region": regions,
-            "region_norm": [
-                self._regions.get(region).name
-                for region in regions
-            ]
+            "region_norm": regions_norm,
+            "region_code": regions_codes,
+            "region_iso_code": regions_iso_codes,
         })
 
         data = data.merge(regions_norm, how="left", on="region")
@@ -218,8 +228,8 @@ class Georeferencer:
         print("Loaded address abbreviations")
 
     def _load_cities(self):
-        cities_base = pd.read_csv(self.CITIES_BASE_PATH)
-        cities_additional = pd.read_csv(self.CITIES_ADDITIONAL_PATH)
+        cities_base = pd.read_csv(self.CITIES_BASE_PATH, dtype=str)
+        cities_additional = pd.read_csv(self.CITIES_ADDITIONAL_PATH, dtype=str)
         cities = pd.concat((cities_base, cities_additional))
         cities.reset_index(drop=True, inplace=True)
         cities["id"] = range(0, cities.shape[0])
@@ -231,7 +241,7 @@ class Georeferencer:
         print("Loaded regions")
 
     def _load_settlements(self):
-        self._settlements = pd.read_csv(self.SETTLEMENTS_PATH)
+        self._settlements = pd.read_csv(self.SETTLEMENTS_PATH, dtype=str)
         print("Loaded settlements")
 
     def _georeference(
@@ -432,6 +442,8 @@ class Georeferencer:
             "org_short_name",
             "activity_code_main",
             "region",
+            "region_code",
+            "region_iso_code",
             "area",
             "settlement",
             "settlement_type",
@@ -455,6 +467,15 @@ class Georeferencer:
 
         return data
 
+    def _process_federal_cities(self, data: pd.DataFrame) -> pd.DataFrame:
+        for city in ("Москва", "Санкт-Петербург"):
+            data.loc[
+                (data["region"] == city) & data["settlement"].isna(),
+                "settlement"
+            ] = city
+
+        return data
+
     def _save(self, data: pd.DataFrame, out_file: str):
         product_cols = [
             "id",
@@ -468,6 +489,8 @@ class Georeferencer:
             "org_name",
             "org_short_name",
             "activity_code_main",
+            "region_iso_code",
+            "region_code",
             "region",
             "area",
             "settlement",
