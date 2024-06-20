@@ -59,6 +59,8 @@ class Georeferencer:
         "settlement_type",
     ]
 
+    CHUNKSIZE = 1e6
+
     def __init__(self):
         self._abbr = None
         self._cities = None
@@ -72,42 +74,48 @@ class Georeferencer:
             print(f"Input file {in_file} not found")
             return
 
-        data = pd.read_csv(in_file, dtype=str)
-        data["id"] = range(0, data.shape[0])
+        data = pd.read_csv(in_file, dtype=str, chunksize=self.CHUNKSIZE)
 
-        addresses = self._get_addresses(data)
-        cities = self._get_cities_standard()
-        settlements = self._get_settlements_standard()
+        for i, chunk in enumerate(data):
+            print(
+                f"Processing chunk #{i}:"
+                f" {i * self.CHUNKSIZE:.0f}–{(i + 1) * self.CHUNKSIZE:.0f}"
+            )
+            chunk["id"] = range(0, chunk.shape[0])
 
-        mapping = self._georeference(addresses, cities, settlements)
-        data = self._remove_raw_addresses(data)
+            addresses = self._get_addresses(chunk)
+            cities = self._get_cities_standard()
+            settlements = self._get_settlements_standard()
 
-        data = data.merge(mapping, how="left")
-        geo = self._get_joint_geodata()
+            mapping = self._georeference(addresses, cities, settlements)
+            chunk = self._remove_raw_addresses(chunk)
 
-        initial_count = len(data)
-        data = data.merge(geo, how="left", on=["geo_id", "type"])
-        assert len(data) == initial_count
-        data.drop(columns=["geo_id", "type"], inplace=True)
+            chunk = chunk.merge(mapping, how="left")
+            geo = self._get_joint_geodata()
 
-        initial_count = len(data)
-        data = data.merge(
-            addresses[["id", "region"]],
-            how="left",
-            on="id")
-        assert len(data) == initial_count
-        data["region"] = data["region_x"].combine_first(data["region_y"])
-        data.drop(
-            columns=["region_x", "region_y", "region_code"],
-            inplace=True
-        )
+            initial_count = len(chunk)
+            chunk = chunk.merge(geo, how="left", on=["geo_id", "type"])
+            assert len(chunk) == initial_count
+            chunk.drop(columns=["geo_id", "type"], inplace=True)
 
-        data = self._normalize_region_names(data)
-        data = self._process_federal_cities(data)
+            initial_count = len(chunk)
+            chunk = chunk.merge(
+                addresses[["id", "region"]],
+                how="left",
+                on="id")
+            assert len(chunk) == initial_count
+            chunk["region"] = chunk["region_x"].combine_first(chunk["region_y"])
+            chunk.drop(
+                columns=["region_x", "region_y", "region_code"],
+                inplace=True
+            )
 
-        data = self._remove_duplicates(data)
+            chunk = self._normalize_region_names(chunk)
+            chunk = self._process_federal_cities(chunk)
 
-        self._save(data, out_file)
+            chunk = self._remove_duplicates(chunk)
+
+            self._save(chunk, out_file)
 
     def _get_addresses(self, data: pd.DataFrame) -> pd.DataFrame:
         addresses = data.loc[:, ["id"] + self.ADDR_COLS]
@@ -407,7 +415,7 @@ class Georeferencer:
         )
         c.loc[c["area_type"] == "г", "area"] = np.nan
         c["area"] = c[["area", "area_type"]].apply(
-            lambda x: _join_area_and_type(x[0], x[1]), axis=1)
+            lambda x: _join_area_and_type(x.iloc[0], x.iloc[1]), axis=1)
 
         c["geosource_type"] = "c"
         c["settlement_type"] = "г"
@@ -478,7 +486,6 @@ class Georeferencer:
 
     def _save(self, data: pd.DataFrame, out_file: str):
         product_cols = [
-            "id",
             "tin",
             "reg_number",
             "kind",
@@ -504,5 +511,10 @@ class Georeferencer:
         ]
         product = data[product_cols]
 
-        pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
-        product.to_csv(out_file, index=False)
+        out_file = pathlib.Path(out_file)
+        out_file.parent.mkdir(parents=True, exist_ok=True)
+
+        if out_file.exists():
+            product.to_csv(out_file, index=False, header=False, mode="a")
+        else:
+            product.to_csv(out_file, index=False)
