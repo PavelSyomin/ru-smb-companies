@@ -9,7 +9,7 @@ import typer
 from ru_smb_companies.stages.aggregate import Aggregator
 from ru_smb_companies.stages.download import Downloader
 from ru_smb_companies.stages.extract import Extractor
-from ru_smb_companies.stages.georeference import Georeferencer
+from ru_smb_companies.stages.geocode import Geocoder
 from ru_smb_companies.stages.panelize import Panelizer
 from ru_smb_companies.utils.enums import SourceDatasets, StageNames, Storages
 
@@ -396,7 +396,7 @@ def aggregate_empl(
 
 
 @app.command(rich_help_panel="Stages")
-def georeference(
+def geocode(
     in_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
@@ -409,14 +409,14 @@ def georeference(
     out_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to save georeferenced CSV file"
+            help="Path to save geocoded CSV file"
         )
-    ] = get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv")
+    ] = get_default_path(StageNames.geocode.value, SourceDatasets.smb.value, "geocoded.csv")
 ):
     """
-    Georeference SMB aggregated data (stage 4)
+    Geocode SMB aggregated data (stage 4)
     """
-    g = Georeferencer()
+    g = Geocoder()
     g(str(in_file), str(out_file))
 
 
@@ -425,12 +425,12 @@ def panelize(
     smb_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to georeferenced CSV file. Usually the same as *out_file* on georeference stage",
+            help="Path to geocoded CSV file. Usually the same as *out_file* on geocode stage",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = get_default_path(StageNames.georeference.value, SourceDatasets.smb.value, "georeferenced.csv"),
+    ] = get_default_path(StageNames.geocode.value, SourceDatasets.smb.value, "geocoded.csv"),
     out_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
@@ -457,7 +457,7 @@ def panelize(
     ] = get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv"),
 ):
     """
-    Make panel dataset based on georeferenced SMB data and aggregated revexp and empl tables (stage 5)
+    Make panel dataset based on geocoded SMB data and aggregated revexp and empl tables (stage 5)
     """
     p = Panelizer()
     p(str(smb_file), str(out_file), str(revexp_file), str(empl_file))
@@ -535,5 +535,5 @@ def process(
 
     extract_all(ac=ac)
     aggregate_all()
-    georeference()
+    geocode()
     panelize()

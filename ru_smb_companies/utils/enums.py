@@ -11,7 +11,7 @@ class StageNames(enum.Enum):
     download = "download"
     extract = "extract"
     aggregate = "aggregate"
-    georeference = "georeference"
+    geocode = "geocode"
     panelize = "panelize"
 
 

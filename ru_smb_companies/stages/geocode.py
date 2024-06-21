@@ -41,7 +41,7 @@ def _preprocess_text_column(c: pd.Series) -> pd.Series:
     return c.str.upper().str.replace("Ё", "Е")
 
 
-class Georeferencer:
+class Geocoder:
     ABBR_PATH = get_asset_path("abbr.csv")
     CITIES_BASE_PATH = get_asset_path("cities.csv")
     CITIES_ADDITIONAL_PATH = get_asset_path("cities_additional.csv")
@@ -87,7 +87,7 @@ class Georeferencer:
             cities = self._get_cities_standard()
             settlements = self._get_settlements_standard()
 
-            mapping = self._georeference(addresses, cities, settlements)
+            mapping = self._geocode(addresses, cities, settlements)
             chunk = self._remove_raw_addresses(chunk)
 
             chunk = chunk.merge(mapping, how="left")
@@ -252,7 +252,7 @@ class Georeferencer:
         self._settlements = pd.read_csv(self.SETTLEMENTS_PATH, dtype=str)
         print("Loaded settlements")
 
-    def _georeference(
+    def _geocode(
         self,
         addresses: pd.DataFrame,
         cities: pd.DataFrame,
