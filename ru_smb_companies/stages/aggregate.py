@@ -1,41 +1,17 @@
-import pathlib
-import shutil
-import tempfile
 from typing import List, Optional
 
-from pyspark.sql import DataFrame, SparkSession, Window
+from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import (coalesce, desc, first, last, lead,
     lower, lpad, row_number, upper, year)
-from pyspark.sql.types import StructType
 
+from ..stages.spark_stage import SparkStage
 from ..utils.enums import SourceDatasets, Storages
 from ..utils.spark_schemas import smb_schema, revexp_schema, empl_schema
 
 
-def _write(df: DataFrame, out_file: str):
-    """Save Spark dataframe into a single CSV file"""
-    with tempfile.TemporaryDirectory() as out_dir:
-        options = dict(header=True, nullValue="NA", escape='"')
-        df.coalesce(1).write.options(**options).csv(out_dir, mode="overwrite")
-
-        # Spark writes to a folder with an arbitrary filename,
-        # so we need to find and move the resulting file to the destination
-        result = next(pathlib.Path(out_dir).glob("*.csv"), None)
-        if result is None:
-            print("Failed to save file")
-
-        pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
-        shutil.move(result, out_file)
-
-
-class Aggregator:
-    def __init__(self):
-        self._session = None
-
-        self._init_spark()
-
-    def __del__(self):
-        self._session.stop()
+class Aggregator(SparkStage):
+    INPUT_DATE_FORMAT = "dd.MM.yyyy"
+    SPARK_APP_NAME = "Extracted Data Aggregator"
 
     def __call__(self, in_dir: str, out_file: str,
                  source_dataset: str, smb_data_file: Optional[str] = None):
@@ -60,23 +36,9 @@ class Aggregator:
 
         return table
 
-    def _init_spark(self):
-        """Spark configuration and initialization"""
-        print("Starting Spark")
-        self._session = (
-            SparkSession
-            .builder
-            .master("local")
-            .appName("Data Aggregator")
-            .getOrCreate()
-        )
-
-        web_url = self._session.sparkContext.uiWebUrl
-        print(f"Spark session have started. You can monitor it at {web_url}")
-
     def _process_smb_registry(self, in_dir: str, out_file: str):
         """Process CSV files extacted from SMB registry archives"""
-        data = self._read_input_files(in_dir, smb_schema)
+        data = self._read(in_dir, smb_schema, date_format=self.INPUT_DATE_FORMAT)
         if data is None:
             return
 
@@ -172,12 +134,12 @@ class Aggregator:
         count_after = table.count()
         print(f"Aggregated table contains {count_after} rows")
 
-        _write(table, out_file)
+        self._write(table, out_file)
 
     def _process_revexp_data(self, in_dir: str, out_file: str,
                              smb_data_file: Optional[str]):
         """Combine revexp CSV files into a single file filtering by TINs"""
-        data = self._read_input_files(in_dir, revexp_schema)
+        data = self._read(in_dir, revexp_schema, date_format=self.INPUT_DATE_FORMAT)
         if data is None:
             return
 
@@ -203,12 +165,12 @@ class Aggregator:
 
         print(f"Revexp resulting table contains {table.count()} rows")
 
-        _write(table, out_file)
+        self._write(table, out_file)
 
     def _process_empl_data(self, in_dir: str, out_file: str,
                            smb_data_file: Optional[str]):
         """Combine employees CSV files into a single file filtering by TINs"""
-        data = self._read_input_files(in_dir, empl_schema)
+        data = self._read(in_dir, empl_schema, date_format=self.INPUT_DATE_FORMAT)
         if data is None:
             return
 
@@ -234,23 +196,4 @@ class Aggregator:
 
         print(f"Revexp resulting table contains {table.count()} rows")
 
-        _write(table, out_file)
-
-    def _read_input_files(self, in_dir: str, schema: StructType) -> DataFrame:
-        path = pathlib.Path(in_dir)
-        if not path.exists():
-            print(f"Input path {in_dir} not found")
-            return None
-
-        input_files = [str(fn) for fn in path.glob("data-*.csv")]
-        if len(input_files) == 0:
-            print("Input directory does not contain extracted CSV files")
-            return None
-
-        data = self._session.read.options(
-            header=True, dateFormat="dd.MM.yyyy", escape='"'
-        ).schema(schema).csv(input_files)
-
-        print(f"Source CSV files contain {data.count()} rows")
-
-        return data
+        self._write(table, out_file)
