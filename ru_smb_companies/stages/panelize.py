@@ -1,45 +1,57 @@
 import pathlib
 from typing import Optional
 
-import pandas as pd
+from pyspark.sql import DataFrame, Window
+import pyspark.sql.functions as F
+
+from ..stages.spark_stage import SparkStage
+from ..utils.spark_schemas import (smb_geocoded_schema, revexp_agg_schema,
+    empl_agg_schema)
 
 
-class Panelizer:
+class Panelizer(SparkStage):
+    SPARK_APP_NAME = "Panel Table Maker"
+
     def __call__(self, smb_file: str, out_file: str,
                  revexp_file: Optional[str] = None,
                  empl_file: Optional[str] = None):
-        if not pathlib.Path(smb_file).exists():
-            print(f"Input file {smb_file} not found")
+        smb_data = self._read(smb_file, smb_geocoded_schema)
+        if smb_data is None:
             return
 
-        data = pd.read_csv(smb_file, dtype=str)
+        window_for_row_number = (
+            Window
+            .partitionBy("tin", "year")
+            .orderBy("start_date")
+        )
+        window_for_n_changes = (
+            window_for_row_number
+            .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
+        )
+        panel = (
+            smb_data
+            .withColumn(
+                "year",
+                F.explode(F.sequence(F.year("start_date"), F.year("end_date")))
+            )
+            .withColumns({
+                "n_changes": F.count(F.expr("*")).over(window_for_n_changes),
+                "row_number": F.row_number().over(window_for_row_number),
+                })
+            .filter("row_number == 1")
+            .drop("row_number", "start_date", "end_date")
+        )
 
-        data["start_date"] = pd.to_datetime(data["start_date"])
-        data["end_date"] = pd.to_datetime(data["end_date"])
+        if revexp_file is not None:
+            revexp_data = self._read(revexp_file, revexp_agg_schema)
+            if revexp_data is not None:
+                panel = panel.join(revexp_data, on=["tin", "year"], how="leftouter")
 
-        start_year = data["start_date"].dt.year.min()
-        end_year = data["end_date"].dt.year.max()
-        panel_elems = []
-        for year in range(start_year, end_year + 1):
-            start_dt = pd.Timestamp(f"{year}-01-01")
-            end_dt = pd.Timestamp(f"{year}-12-31")
-            yearly_data = data.sort_values("start_date").loc[~((data["start_date"] > end_dt) | (data["end_date"] < start_dt))].copy()
-            group_sizes = yearly_data.groupby("tin", as_index=False).size()
-            yearly_data.drop_duplicates(subset=["tin"], keep="last", inplace=True)
-            yearly_data["year"] = str(year)
-            yearly_data = yearly_data.merge(group_sizes, how="left", on="tin")
-            yearly_data["confidence"] = 1 / yearly_data["size"]
-            yearly_data.drop(columns=["start_date", "end_date", "size"], inplace=True)
-            panel_elems.append(yearly_data)
-        panel = pd.concat(panel_elems)
+        if empl_file is not None:
+            empl_data = self._read(empl_file, empl_agg_schema)
+            if empl_data is not None:
+                panel = panel.join(empl_data, on=["tin", "year"], how="leftouter")
 
-        if revexp_file is not None and pathlib.Path(revexp_file).exists():
-            revexp = pd.read_csv(revexp_file, dtype=str)
-            panel = panel.merge(revexp, how="left", on=["tin", "year"])
+        panel = panel.orderBy("tin", "year")
 
-        if empl_file is not None and pathlib.Path(empl_file).exists():
-            empl = pd.read_csv(empl_file, dtype=str)
-            panel = panel.merge(empl, how="left", on=["tin", "year"])
-
-        pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
-        panel.to_csv(out_file, index=False)
+        self._write(panel, out_file)

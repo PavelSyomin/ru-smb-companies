@@ -1,6 +1,7 @@
 import pathlib
 import shutil
 import tempfile
+from typing import Optional
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import StructType
@@ -32,7 +33,9 @@ class SparkStage:
         web_url = self._session.sparkContext.uiWebUrl
         print(f"Spark session has started. You can monitor it at {web_url}")
 
-    def _read(self, in_path: str, schema: StructType) -> DataFrame:
+    def _read(
+        self, in_path: str, schema: StructType, date_format: Optional[str] = None
+    ) -> DataFrame:
         path = pathlib.Path(in_path)
         if not path.exists():
             print(f"Input path {in_path} not found")
@@ -40,7 +43,7 @@ class SparkStage:
 
         if path.is_dir():
             input_files = [str(fn) for fn in path.glob("data-*.csv")]
-        elif path.suffix == "csv":
+        elif path.suffix == ".csv":
             input_files = [str(path)]
         else:
             input_files = []
@@ -49,9 +52,14 @@ class SparkStage:
             print("Input path does not contain readable CSV file(s)")
             return None
 
-        data = self._session.read.options(
-            header=True, dateFormat="dd.MM.yyyy", escape='"'
-        ).schema(schema).csv(input_files)
+        options = {
+            "header": True,
+            "escape": '"',
+        }
+        if date_format is not None:
+            options["date_format"] = date_format
+
+        data = self._session.read.options(**options).schema(schema).csv(input_files)
 
         print(f"Source CSV contains {data.count()} rows")
 

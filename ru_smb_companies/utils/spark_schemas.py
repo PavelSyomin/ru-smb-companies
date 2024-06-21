@@ -1,5 +1,5 @@
-from pyspark.sql.types import (StructField, StructType, ByteType, DateType,
-   FloatType, IntegerType, ShortType, StringType)
+from pyspark.sql.types import (ByteType, DateType, FloatType, IntegerType, ShortType,
+    StringType, StructField, StructType)
 
 
 smb_schema = StructType([
@@ -30,6 +30,31 @@ smb_schema = StructType([
     StructField("doc_cnt", ShortType(), True),
 ])
 
+smb_geocoded_schema = StructType([
+    StructField("tin", StringType(), True),
+    StructField("reg_number", StringType(), True),
+    StructField("kind", ByteType(), False),
+    StructField("category", ByteType(), False),
+    StructField("first_name", StringType(), True),
+    StructField("last_name", StringType(), True),
+    StructField("patronymic", StringType(), True),
+    StructField("org_name", StringType(), True),
+    StructField("org_short_name", StringType(), True),
+    StructField("activity_code_main", StringType(), True),
+    StructField("region_iso_code", StringType(), True),
+    StructField("region_code", StringType(), True),
+    StructField("region", StringType(), True),
+    StructField("area", StringType(), True),
+    StructField("settlement", StringType(), True),
+    StructField("settlement_type", StringType(), True),
+    StructField("oktmo", StringType(), True),
+    StructField("lat", FloatType(), True),
+    StructField("lon", FloatType(), True),
+    StructField("address_raw", StringType(), True),
+    StructField("start_date", DateType(), False),
+    StructField("end_date", DateType(), True),
+])
+
 revexp_schema = StructType([
     StructField("org_tin", StringType(), False),
     StructField("revenue", FloatType(), True),
@@ -38,9 +63,23 @@ revexp_schema = StructType([
     StructField("doc_date", DateType(), True),
 ])
 
+revexp_agg_schema = StructType([
+    StructField("tin", StringType(), False),
+    StructField("year", ByteType(), True),
+    StructField("revenue", FloatType(), True),
+    StructField("expenditure", FloatType(), True),
+])
+
 empl_schema = StructType([
     StructField("org_tin", StringType(), False),
     StructField("employees_count", IntegerType(), True),
     StructField("data_date", DateType(), True),
     StructField("doc_date", DateType(), True),
 ])
+
+empl_agg_schema = StructType([
+    StructField("tin", StringType(), False),
+    StructField("year", ByteType(), True),
+    StructField("employees_count", IntegerType(), True),
+])
+
