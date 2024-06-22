@@ -432,7 +432,6 @@ class Geocoder:
         return geodata
 
     def _remove_raw_addresses(self, data: pd.DataFrame) -> pd.DataFrame:
-        data["address_raw"] = data[self.ADDR_COLS].fillna("").agg(" / ".join, axis=1)
         data.drop(columns=self.ADDR_COLS, inplace=True)
 
         return data
@@ -467,7 +466,7 @@ class Geocoder:
             data.loc[duplicates_indices]
             .sort_values("start_date")
             .groupby(cols_to_check_for_duplicates, dropna=False)
-            .agg({"id": "first", "address_raw": "first", "start_date": "first", "end_date": "last"})
+            .agg({"id": "first", "start_date": "first", "end_date": "last"})
             .reset_index()
         )
 
@@ -505,7 +504,6 @@ class Geocoder:
             "oktmo",
             "lat",
             "lon",
-            "address_raw",
             "start_date",
             "end_date",
         ]

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ru-smb-companies"
-version = "0.6.0"
+version = "0.6.1"
 description = "A command-line tool to get a georeferenced dataset of Russian small and medium-sized businesses using open data of Federal Tax Service"
 authors = ["Pavel Syomin <pas.ntg@gmail.com>"]
 readme = "README.md"

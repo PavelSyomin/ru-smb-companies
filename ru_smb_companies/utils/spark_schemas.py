@@ -50,7 +50,6 @@ smb_geocoded_schema = StructType([
     StructField("oktmo", StringType(), True),
     StructField("lat", FloatType(), True),
     StructField("lon", FloatType(), True),
-    StructField("address_raw", StringType(), True),
     StructField("start_date", DateType(), False),
     StructField("end_date", DateType(), True),
 ])
