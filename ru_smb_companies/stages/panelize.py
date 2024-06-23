@@ -34,12 +34,6 @@ class Panelizer(SparkStage):
                 "year",
                 F.explode(F.sequence(F.year("start_date"), F.year("end_date")))
             )
-            .withColumns({
-                "n_changes": F.count(F.expr("*")).over(window_for_n_changes),
-                "row_number": F.row_number().over(window_for_row_number),
-                })
-            .filter("row_number == 1")
-            .drop("row_number", "start_date", "end_date")
         )
 
         if revexp_file is not None:
@@ -54,4 +48,4 @@ class Panelizer(SparkStage):
 
         panel = panel.orderBy("tin", "year")
 
-        self._write(panel, out_file)
+        self._write(panel, out_file, sep=";")

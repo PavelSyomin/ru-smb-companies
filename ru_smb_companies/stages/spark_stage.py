@@ -33,9 +33,7 @@ class SparkStage:
         web_url = self._session.sparkContext.uiWebUrl
         print(f"Spark session has started. You can monitor it at {web_url}")
 
-    def _read(
-        self, in_path: str, schema: StructType, date_format: Optional[str] = None
-    ) -> DataFrame:
+    def _read(self, in_path: str, schema: StructType, **kwargs) -> DataFrame:
         path = pathlib.Path(in_path)
         if not path.exists():
             print(f"Input path {in_path} not found")
@@ -56,8 +54,9 @@ class SparkStage:
             "header": True,
             "escape": '"',
         }
-        if date_format is not None:
-            options["date_format"] = date_format
+        options.update(kwargs)
+
+        print(f"Reading source data at {in_path}")
 
         data = self._session.read.options(**options).schema(schema).csv(input_files)
 
@@ -65,10 +64,13 @@ class SparkStage:
 
         return data
 
-    def _write(self, df: DataFrame, out_file: str):
+    def _write(self, df: DataFrame, out_file: str, **kwargs):
         """Save Spark dataframe into a single CSV file"""
         with tempfile.TemporaryDirectory() as out_dir:
             options = dict(header=True, nullValue="NA", escape='"')
+            options.update(**kwargs)
+
+            print("Writing to temporary directory")
             df.coalesce(1).write.options(**options).csv(out_dir, mode="overwrite")
 
             # Spark writes to a folder with an arbitrary filename,
@@ -79,3 +81,5 @@ class SparkStage:
 
             pathlib.Path(out_file).parent.mkdir(parents=True, exist_ok=True)
             shutil.move(result, out_file)
+
+            print(f"Saved to {out_file}")
