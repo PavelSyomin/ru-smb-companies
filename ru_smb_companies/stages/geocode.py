@@ -1,12 +1,17 @@
 import pathlib
+import tempfile
 from typing import Union
 
 from fuzzywuzzy import fuzz, process
 import numpy as np
 import pandas as pd
+from pyspark.sql import DataFrame, Window
+import pyspark.sql.functions as F
 
+from ..stages.spark_stage import SparkStage
 from ..assets import get_asset_path
 from ..utils.regions import Regions
+from ..utils.spark_schemas import smb_geocoded_schema
 
 
 def _join_name_and_type(n: Union[str, float], t: Union[str, float]) -> str:
@@ -41,7 +46,7 @@ def _preprocess_text_column(c: pd.Series) -> pd.Series:
     return c.str.upper().str.replace("Ё", "Е")
 
 
-class Geocoder:
+class Geocoder(SparkStage):
     ABBR_PATH = get_asset_path("abbr.csv")
     CITIES_BASE_PATH = get_asset_path("cities.csv")
     CITIES_ADDITIONAL_PATH = get_asset_path("cities_additional.csv")
@@ -61,7 +66,11 @@ class Geocoder:
 
     CHUNKSIZE = 1e6
 
+    SPARK_APP_NAME = "Geocoder"
+
     def __init__(self):
+        super().__init__()
+
         self._abbr = None
         self._cities = None
         self._regions = None
@@ -76,46 +85,49 @@ class Geocoder:
 
         data = pd.read_csv(in_file, dtype=str, chunksize=self.CHUNKSIZE)
 
-        for i, chunk in enumerate(data):
-            print(
-                f"Processing chunk #{i}:"
-                f" {i * self.CHUNKSIZE:.0f}–{(i + 1) * self.CHUNKSIZE:.0f}"
-            )
-            chunk["id"] = range(0, chunk.shape[0])
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_df_file = str(pathlib.Path(temp_dir) / "temp_df.csv")
+            for i, chunk in enumerate(data):
+                print(
+                    f"Processing chunk #{i}:"
+                    f" {i * self.CHUNKSIZE:.0f}–{(i + 1) * self.CHUNKSIZE:.0f}"
+                )
+                chunk["id"] = range(0, chunk.shape[0])
 
-            addresses = self._get_addresses(chunk)
-            cities = self._get_cities_standard()
-            settlements = self._get_settlements_standard()
+                addresses = self._get_addresses(chunk)
+                cities = self._get_cities_standard()
+                settlements = self._get_settlements_standard()
 
-            mapping = self._geocode(addresses, cities, settlements)
-            chunk = self._remove_raw_addresses(chunk)
+                mapping = self._geocode(addresses, cities, settlements)
+                chunk = self._remove_raw_addresses(chunk)
 
-            chunk = chunk.merge(mapping, how="left")
-            geo = self._get_joint_geodata()
+                chunk = chunk.merge(mapping, how="left")
+                geo = self._get_joint_geodata()
 
-            initial_count = len(chunk)
-            chunk = chunk.merge(geo, how="left", on=["geo_id", "type"])
-            assert len(chunk) == initial_count
-            chunk.drop(columns=["geo_id", "type"], inplace=True)
+                initial_count = len(chunk)
+                chunk = chunk.merge(geo, how="left", on=["geo_id", "type"])
+                assert len(chunk) == initial_count
+                chunk.drop(columns=["geo_id", "type"], inplace=True)
 
-            initial_count = len(chunk)
-            chunk = chunk.merge(
-                addresses[["id", "region"]],
-                how="left",
-                on="id")
-            assert len(chunk) == initial_count
-            chunk["region"] = chunk["region_x"].combine_first(chunk["region_y"])
-            chunk.drop(
-                columns=["region_x", "region_y", "region_code"],
-                inplace=True
-            )
+                initial_count = len(chunk)
+                chunk = chunk.merge(
+                    addresses[["id", "region"]],
+                    how="left",
+                    on="id")
+                assert len(chunk) == initial_count
+                chunk["region"] = chunk["region_x"].combine_first(chunk["region_y"])
+                chunk.drop(
+                    columns=["region_x", "region_y", "region_code"],
+                    inplace=True
+                )
 
-            chunk = self._normalize_region_names(chunk)
-            chunk = self._process_federal_cities(chunk)
+                chunk = self._normalize_region_names(chunk)
+                chunk = self._process_federal_cities(chunk)
 
-            chunk = self._remove_duplicates(chunk)
+                self._save(chunk, temp_df_file)
 
-            self._save(chunk, out_file)
+            deduplicated = self._remove_duplicates(temp_df_file)
+            self._write(deduplicated, out_file)
 
     def _get_addresses(self, data: pd.DataFrame) -> pd.DataFrame:
         addresses = data.loc[:, ["id"] + self.ADDR_COLS]
@@ -436,7 +448,9 @@ class Geocoder:
 
         return data
 
-    def _remove_duplicates(self, data: pd.DataFrame) -> pd.DataFrame:
+    def _remove_duplicates(self, in_file: str) -> DataFrame:
+        print("Removing duplicates that may have appeared after geocoding")
+
         cols_to_check_for_duplicates = [
             "kind",
             "category",
@@ -458,21 +472,29 @@ class Geocoder:
             "lat",
             "lon",
         ]
-        duplicates_indices = data.duplicated(
-            subset=cols_to_check_for_duplicates,
-            keep=False
+        w_for_row_number = (
+            Window
+            .partitionBy(cols_to_check_for_duplicates)
+            .orderBy("start_date")
         )
-        duplicates_cleaned = (
-            data.loc[duplicates_indices]
-            .sort_values("start_date")
-            .groupby(cols_to_check_for_duplicates, dropna=False)
-            .agg({"id": "first", "start_date": "first", "end_date": "last"})
-            .reset_index()
+        w_for_end_date = w_for_row_number.rowsBetween(0, Window.unboundedFollowing)
+
+        data = self._read(in_file, smb_geocoded_schema)
+
+        initial_count = data.count()
+        deduplicated = (
+            data
+            .withColumn("row_number", F.row_number().over(w_for_row_number))
+            .withColumn("end_date", F.last("end_date").over(w_for_end_date))
+            .filter("row_number = 1")
+            .drop("row_number")
+            .orderBy("tin", "start_date")
         )
+        after_count = deduplicated.count()
 
-        data = pd.concat((data.loc[~duplicates_indices], duplicates_cleaned))
+        print(f"Removed {initial_count - after_count} duplicated rows")
 
-        return data
+        return deduplicated
 
     def _process_federal_cities(self, data: pd.DataFrame) -> pd.DataFrame:
         for city in ("Москва", "Санкт-Петербург"):
