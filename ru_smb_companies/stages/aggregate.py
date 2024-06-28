@@ -38,7 +38,7 @@ class Aggregator(SparkStage):
 
     def _process_smb_registry(self, in_dir: str, out_file: str):
         """Process CSV files extacted from SMB registry archives"""
-        data = self._read(in_dir, smb_schema, date_format=self.INPUT_DATE_FORMAT)
+        data = self._read(in_dir, smb_schema, dateFormat=self.INPUT_DATE_FORMAT)
         if data is None:
             return
 
@@ -139,7 +139,7 @@ class Aggregator(SparkStage):
     def _process_revexp_data(self, in_dir: str, out_file: str,
                              smb_data_file: Optional[str]):
         """Combine revexp CSV files into a single file filtering by TINs"""
-        data = self._read(in_dir, revexp_schema, date_format=self.INPUT_DATE_FORMAT)
+        data = self._read(in_dir, revexp_schema, dateFormat=self.INPUT_DATE_FORMAT)
         if data is None:
             return
 
@@ -170,7 +170,7 @@ class Aggregator(SparkStage):
     def _process_empl_data(self, in_dir: str, out_file: str,
                            smb_data_file: Optional[str]):
         """Combine employees CSV files into a single file filtering by TINs"""
-        data = self._read(in_dir, empl_schema, date_format=self.INPUT_DATE_FORMAT)
+        data = self._read(in_dir, empl_schema, dateFormat=self.INPUT_DATE_FORMAT)
         if data is None:
             return
 

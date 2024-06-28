@@ -41,7 +41,7 @@ class SparkStage:
 
         if path.is_dir():
             input_files = [str(fn) for fn in path.glob("data-*.csv")]
-        elif path.suffix == ".csv":
+        elif path.suffix in (".csv",):
             input_files = [str(path)]
         else:
             input_files = []

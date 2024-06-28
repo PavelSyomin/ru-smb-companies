@@ -19,15 +19,6 @@ class Panelizer(SparkStage):
         if smb_data is None:
             return
 
-        window_for_row_number = (
-            Window
-            .partitionBy("tin", "year")
-            .orderBy("start_date")
-        )
-        window_for_n_changes = (
-            window_for_row_number
-            .rowsBetween(Window.unboundedPreceding, Window.unboundedFollowing)
-        )
         panel = (
             smb_data
             .withColumn(

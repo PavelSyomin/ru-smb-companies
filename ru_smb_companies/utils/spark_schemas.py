@@ -64,7 +64,7 @@ revexp_schema = StructType([
 
 revexp_agg_schema = StructType([
     StructField("tin", StringType(), False),
-    StructField("year", ByteType(), True),
+    StructField("year", ShortType(), True),
     StructField("revenue", FloatType(), True),
     StructField("expenditure", FloatType(), True),
 ])
@@ -78,7 +78,7 @@ empl_schema = StructType([
 
 empl_agg_schema = StructType([
     StructField("tin", StringType(), False),
-    StructField("year", ByteType(), True),
+    StructField("year", ShortType(), True),
     StructField("employees_count", IntegerType(), True),
 ])
 
