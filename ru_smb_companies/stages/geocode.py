@@ -1,6 +1,7 @@
 import pathlib
+import shutil
 import tempfile
-from typing import Union
+from typing import Optional, Union
 
 from fuzzywuzzy import fuzz, process
 import numpy as np
@@ -15,17 +16,20 @@ from ..utils.spark_schemas import smb_geocoded_schema
 
 
 def _join_name_and_type(n: Union[str, float], t: Union[str, float]) -> str:
-    if pd.isna(n) or pd.isna(t):
+    if pd.isna(n):
         return np.nan
+
+    if pd.isna(t):
+        return n
 
     prepend_types = (
         "Город", "Республика", "Поселок", "Поселок городского типа", "Рабочий поселок"
     )
     prepend = t in prepend_types
     if prepend:
-        return f"{t} {n}"
+        return f"{t} {n}".strip()
 
-    return f"{n} {t}"
+    return f"{n} {t}".strip()
 
 
 def _join_area_and_type(a: Union[str, float], t: Union[str, float]) -> str:
@@ -64,17 +68,82 @@ class Geocoder(SparkStage):
         "settlement_type",
     ]
 
+    DEDUPLICATION_INDEX = [
+        "kind",
+        "category",
+        "tin",
+        "reg_number",
+        "first_name",
+        "last_name",
+        "patronymic",
+        "org_name",
+        "org_short_name",
+        "activity_code_main",
+        "region",
+        "region_code",
+        "region_iso_code",
+        "area",
+        "settlement",
+        "settlement_type",
+        "oktmo",
+        "lat",
+        "lon",
+    ]
+
+    PRODUCT_COLS = [
+        "tin",
+        "reg_number",
+        "kind",
+        "category",
+        "first_name",
+        "last_name",
+        "patronymic",
+        "org_name",
+        "org_short_name",
+        "activity_code_main",
+        "region_iso_code",
+        "region_code",
+        "region",
+        "area",
+        "settlement",
+        "settlement_type",
+        "oktmo",
+        "lat",
+        "lon",
+        "start_date",
+        "end_date",
+    ]
+
+    SIGNATURE_COLS = [
+        "tin",
+        "reg_number",
+        "kind",
+        "category",
+        "first_name",
+        "last_name",
+        "patronymic",
+        "org_name",
+        "org_short_name",
+        "activity_code_main",
+    ]
+
     CHUNKSIZE = 1e6
 
     SPARK_APP_NAME = "Geocoder"
 
     def __init__(self):
-        super().__init__()
+        super().__init__(start_spark=False)
+
+        self._mode = None
 
         self._abbr = None
         self._cities = None
         self._regions = None
         self._settlements = None
+
+        self._cities_lookup = None
+        self._settlements_lookup = None
+        self._joint_geodata = None
 
         self._setup_geodata()
 
@@ -92,20 +161,24 @@ class Geocoder(SparkStage):
                     f"Processing chunk #{i}:"
                     f" {i * self.CHUNKSIZE:.0f}–{(i + 1) * self.CHUNKSIZE:.0f}"
                 )
-                chunk["id"] = range(0, chunk.shape[0])
+
+                self._detect_mode(chunk)
+
+                if not self._check_structure(chunk):
+                    print("Input data is not suitable for geocoding")
+                    return
+
+                chunk = self._fix_structure(chunk)
 
                 addresses = self._get_addresses(chunk)
-                cities = self._get_cities_standard()
-                settlements = self._get_settlements_standard()
 
-                mapping = self._geocode(addresses, cities, settlements)
+                mapping = self._geocode(addresses)
                 chunk = self._remove_raw_addresses(chunk)
 
                 chunk = chunk.merge(mapping, how="left")
-                geo = self._get_joint_geodata()
 
                 initial_count = len(chunk)
-                chunk = chunk.merge(geo, how="left", on=["geo_id", "type"])
+                chunk = chunk.merge(self._joint_geodata, how="left", on=["geo_id", "type"])
                 assert len(chunk) == initial_count
                 chunk.drop(columns=["geo_id", "type"], inplace=True)
 
@@ -118,7 +191,8 @@ class Geocoder(SparkStage):
                 chunk["region"] = chunk["region_x"].combine_first(chunk["region_y"])
                 chunk.drop(
                     columns=["region_x", "region_y", "region_code"],
-                    inplace=True
+                    inplace=True,
+                    errors="ignore",
                 )
 
                 chunk = self._normalize_region_names(chunk)
@@ -126,8 +200,49 @@ class Geocoder(SparkStage):
 
                 self._save(chunk, temp_df_file)
 
-            deduplicated = self._remove_duplicates(temp_df_file)
-            self._write(deduplicated, out_file)
+            if self._mode == "chain":
+                self._init_spark()
+                deduplicated = self._remove_duplicates(temp_df_file)
+                self._write(deduplicated, out_file)
+            else:
+                shutil.move(temp_df_file, out_file)
+
+    def _check_structure(self, data: pd.DataFrame) -> bool:
+        if any(c not in data.columns and "_type" not in c for c in self.ADDR_COLS):
+            print(f"Column {c} is required but not found in data")
+            return False
+
+        return True
+
+    def _fix_structure(self, data: pd.DataFrame) -> pd.DataFrame:
+        # Ensure ids are present and correct (they are used to join mapped addresses)
+        if "id" not in data.columns:
+            data["id"] = range(0, data.shape[0])
+        elif data["id"].nunique() != len(data):
+            print(f"Found duplicates in id column, fixing")
+            data["id"] = range(0, data.shape[0])
+
+        # Add missing non-mandatory address elements
+        for col in self.ADDR_COLS:
+            if col not in data.columns and "_type" in col:
+                data[col] = np.nan
+
+        return data
+
+    def _detect_mode(self, data: pd.DataFrame):
+        if self._mode is not None: # already detected
+            return
+
+        if any(col not in data.columns for col in self.SIGNATURE_COLS):
+            print(
+                "Seems that you are running the geocoder in standalone mode"
+                " (that is, to process the data other than generated by this app"
+                " at the aggregate stage). This is OK, and the dataset will be geocoded"
+                " as usual, but deduplication and selection of columns won't work"
+            )
+            self._mode = "standalone"
+        else:
+            self._mode = "chain"
 
     def _get_addresses(self, data: pd.DataFrame) -> pd.DataFrame:
         addresses = data.loc[:, ["id"] + self.ADDR_COLS]
@@ -137,7 +252,7 @@ class Geocoder(SparkStage):
 
         return addresses
 
-    def _get_cities_standard(self) -> pd.DataFrame:
+    def _build_cities_lookup(self) -> pd.DataFrame:
         std = self._cities[["id", "region", "area", "city", "settlement"]]
         cities_from_areas = self._cities.loc[(self._cities["area_type"] == "г") & (self._cities["city"].isna())].copy()
         cities_from_areas["city"] = cities_from_areas["area"]
@@ -150,7 +265,7 @@ class Geocoder(SparkStage):
 
         return std
 
-    def _get_settlements_standard(self) -> pd.DataFrame:
+    def _build_settlements_lookup(self) -> pd.DataFrame:
         std = self._settlements.loc[:, ["id", "region", "municipality", "settlement", "type"]]
         std = self._expand_abbrs(std, "type")
         std = self._normalize_region_names(std)
@@ -159,7 +274,8 @@ class Geocoder(SparkStage):
         return std
 
     def _normalize_address_elements_types(
-            self, addresses: pd.DataFrame) -> pd.DataFrame:
+        self, addresses: pd.DataFrame
+    ) -> pd.DataFrame:
         for option in ("region", "district", "city", "settlement"):
             target_col = f"{option}_type"
             addresses = self._expand_abbrs(addresses, target_col)
@@ -174,7 +290,7 @@ class Geocoder(SparkStage):
 
     def _expand_abbrs(self, data: pd.DataFrame, column: str) -> pd.DataFrame:
         initial_count = len(data)
-        data[column] = data[column].str.upper()
+        data[column] = data[column].fillna("").str.upper()
         data = data.merge(
             self._abbr,
             how="left",
@@ -225,6 +341,8 @@ class Geocoder(SparkStage):
         self._load_regions()
         self._load_settlements()
 
+        self._build_lookup_tables()
+
     def _load_abbr(self):
         abbr = pd.read_csv(self.ABBR_PATH)
 
@@ -264,11 +382,15 @@ class Geocoder(SparkStage):
         self._settlements = pd.read_csv(self.SETTLEMENTS_PATH, dtype=str)
         print("Loaded settlements")
 
+    def _build_lookup_tables(self):
+        self._cities_lookup = self._build_cities_lookup()
+        self._settlements_lookup = self._build_settlements_lookup()
+        self._joint_geodata = self._build_joint_geodata()
+        print("Builded lookup tables")
+
     def _geocode(
         self,
         addresses: pd.DataFrame,
-        cities: pd.DataFrame,
-        settlements: pd.DataFrame
     ) -> pd.DataFrame:
         merge_options = [
             {
@@ -367,7 +489,7 @@ class Geocoder(SparkStage):
             type_ = option["type"]
 
             to_merge = rest[orig_cols]
-            standard = cities.copy() if type_ == "cities" else settlements.copy()
+            standard = self._cities_lookup.copy() if type_ == "cities" else self._settlements_lookup.copy()
             standard.drop_duplicates(subset=right_cols, keep=False, inplace=True)
             if len(right_cols) == 2:
                 standard.dropna(subset=right_cols, inplace=True)
@@ -398,7 +520,7 @@ class Geocoder(SparkStage):
 
         return addr_to_geo
 
-    def _get_joint_geodata(self) -> pd.DataFrame:
+    def _build_joint_geodata(self) -> pd.DataFrame:
         s_cols = [
             "id", "region", "municipality", "settlement", "type",
             "oktmo", "longitude_dd", "latitude_dd"
@@ -451,30 +573,9 @@ class Geocoder(SparkStage):
     def _remove_duplicates(self, in_file: str) -> DataFrame:
         print("Removing duplicates that may have appeared after geocoding")
 
-        cols_to_check_for_duplicates = [
-            "kind",
-            "category",
-            "tin",
-            "reg_number",
-            "first_name",
-            "last_name",
-            "patronymic",
-            "org_name",
-            "org_short_name",
-            "activity_code_main",
-            "region",
-            "region_code",
-            "region_iso_code",
-            "area",
-            "settlement",
-            "settlement_type",
-            "oktmo",
-            "lat",
-            "lon",
-        ]
         w_for_row_number = (
             Window
-            .partitionBy(cols_to_check_for_duplicates)
+            .partitionBy(self.DEDUPLICATION_INDEX)
             .orderBy("start_date")
         )
         w_for_end_date = w_for_row_number.rowsBetween(0, Window.unboundedFollowing)
@@ -506,30 +607,7 @@ class Geocoder(SparkStage):
         return data
 
     def _save(self, data: pd.DataFrame, out_file: str):
-        product_cols = [
-            "tin",
-            "reg_number",
-            "kind",
-            "category",
-            "first_name",
-            "last_name",
-            "patronymic",
-            "org_name",
-            "org_short_name",
-            "activity_code_main",
-            "region_iso_code",
-            "region_code",
-            "region",
-            "area",
-            "settlement",
-            "settlement_type",
-            "oktmo",
-            "lat",
-            "lon",
-            "start_date",
-            "end_date",
-        ]
-        product = data[product_cols]
+        product = data[self.PRODUCT_COLS] if self._mode == "chain" else data
 
         out_file = pathlib.Path(out_file)
         out_file.parent.mkdir(parents=True, exist_ok=True)

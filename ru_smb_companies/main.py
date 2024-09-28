@@ -400,7 +400,7 @@ def geocode(
     in_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to aggregated CSV files. Usually the same as *out_file* on aggregate smb stage",
+            help="Path to a CSV file. Usually the same as *out_file* on aggregate smb stage. CSV file must include at least *region_name*, *district_name*, *city_name*, *settlement_name* fields",
             exists=True,
             file_okay=True,
             readable=True
@@ -414,7 +414,7 @@ def geocode(
     ] = get_default_path(StageNames.geocode.value, SourceDatasets.smb.value, "geocoded.csv")
 ):
     """
-    Geocode SMB aggregated data (stage 4)
+    Geocode SMB aggregated data (stage 4) OR geocode *any other dataset with a similar structure of address fields*
     """
     g = Geocoder()
     g(str(in_file), str(out_file))

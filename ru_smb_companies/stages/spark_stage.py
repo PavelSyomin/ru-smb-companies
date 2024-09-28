@@ -10,14 +10,16 @@ from pyspark.sql.types import StructType
 class SparkStage:
     SPARK_APP_NAME = "Generic Spark Stage"
 
-    def __init__(self):
+    def __init__(self, start_spark: bool = True):
         self._session = None
 
-        self._init_spark()
+        if start_spark:
+            self._init_spark()
 
     def __del__(self):
-        print("Stopping Spark")
-        self._session.stop()
+        if self._session is not None:
+            print("Stopping Spark")
+            self._session.stop()
 
     def _init_spark(self):
         """Spark configuration and initialization"""
