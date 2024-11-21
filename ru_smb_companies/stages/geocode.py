@@ -47,6 +47,9 @@ def _join_area_and_type(a: Union[str, float], t: Union[str, float]) -> str:
 
 
 def _preprocess_text_column(c: pd.Series) -> pd.Series:
+    if c.notna().sum() == 0:
+        return c
+
     return c.str.upper().str.replace("Ё", "Е")
 
 
@@ -208,8 +211,15 @@ class Geocoder(SparkStage):
                 shutil.move(temp_df_file, out_file)
 
     def _check_structure(self, data: pd.DataFrame) -> bool:
-        if any(c not in data.columns and "_type" not in c for c in self.ADDR_COLS):
-            print(f"Column {c} is required but not found in data")
+        missing_columns = [
+            col for col in self.ADDR_COLS
+            if col not in data.columns and "_type" not in col
+        ]
+        if missing_columns:
+            print(
+                f"Column(s) {', '.join(missing_columns)} are/is required"
+                " but not found in data"
+            )
             return False
 
         return True
