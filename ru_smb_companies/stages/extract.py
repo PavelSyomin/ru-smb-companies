@@ -126,10 +126,10 @@ class Extractor:
 
     def __call__(self, in_dir: str, out_dir: str, source_dataset: str,
                  clear: Optional[bool] = False,
-                 activity_codes: Optional[List[str]] = None):
+                 activity_codes: Optional[List[str]] = None) -> Optional[int]:
         input_files = self._get_files(in_dir)
         if len(input_files) == 0:
-            print("Input path does not contain source XML files")
+            print("Input path does not contain source ZIP files")
             return
 
         history_file_path = pathlib.Path(out_dir) / "history.json"
@@ -148,6 +148,7 @@ class Extractor:
             debug=True if source_dataset in (SourceDatasets.smb.value,) else False
         )
 
+        processed_count = 0
         for filename in input_files:
             if filename in history:
                 print(f"{filename} already processed")
@@ -181,7 +182,10 @@ class Extractor:
             self._remove_local_file(path)
             history.append(filename)
             self._dump_history(history, history_file_path)
+            processed_count += 1
             del archive
+
+        return processed_count
 
     def _download(self, data_path: str, filename: str) -> pathlib.Path:
         print(f"Downloading file from Yandex Disk to {self._temp_dir.name}")

@@ -123,7 +123,7 @@ class Downloader:
                       f"expected {expected_name} on position {expected_number}, found {name}")
                 return []
 
-        # Extract URLs of data files and schema files
+        # Extract URLs of data files
         data_urls = []
         data_links = row_index[8]["value"]("a") + row_index[16]["value"]("a")
         for link in data_links:
@@ -243,7 +243,7 @@ class Downloader:
 
         try:
             resp = requests.get(info_url, headers=headers, timeout=3)
-        except Exception:
+        except Exception as e:
             return "check error"
 
         if resp.status_code == 200:
@@ -266,7 +266,7 @@ class Downloader:
 
             print("Waiting for download to complete")
             interval = 5
-            for _ in range(1 + self.YDISK_DOWNLOAD_TIMEOUT // interval):
+            for _ in range(0 + self.YDISK_DOWNLOAD_TIMEOUT // interval):
                 time.sleep(interval)
                 status = self._check_ydisk_download_status(info_url)
                 if status == "success":
