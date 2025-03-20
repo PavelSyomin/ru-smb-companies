@@ -4,7 +4,9 @@ import zipfile
 
 import pandas as pd
 import pytest
+import requests
 
+from .common import mock_get, mock_ydisk_api
 from ..stages.extract import Extractor
 from ..utils.elements import elements
 from ..utils.enums import SourceDatasets, Storages
@@ -327,3 +329,34 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
     )
     assert len(extracted.loc[extracted["ind_tin"] == "523400390188"]) == 1
     assert len(extracted.loc[extracted["ind_tin"] == "523300890660"]) == 0
+
+
+def test_extract_ydisk(monkeypatch, tmp_path):
+    in_dir = "smb"
+    out_dir = tmp_path / "results"
+    out_dir.mkdir()
+
+    extractor = Extractor(Storages.ydisk.value, token="token")
+
+    mock_ydisk_api.put(
+        "disk/resources",
+        dict(Authorization=f"OAuth token"),
+        dict(path="smb"),
+    )
+
+    for fn in ("smb-test-data-1.zip", "smb-test-data-2.zip"):
+        mock_ydisk_api.post(
+            "disk/resources/upload",
+            dict(Authorization=f"OAuth token"),
+            dict(path=f"smb/{fn}", url=fn),
+        )
+    monkeypatch.setattr(requests, "get", mock_get)
+
+    call_result = extractor(
+        in_dir,
+        str(out_dir),
+        SourceDatasets.smb.value,
+    )
+
+    assert call_result == 2
+    assert len(list(out_dir.glob("*.csv"))) == 2

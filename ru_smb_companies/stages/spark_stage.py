@@ -62,7 +62,7 @@ class SparkStage:
 
         data = self._session.read.options(**options).schema(schema).csv(input_files)
 
-        print(f"Source CSV contains {data.count()} rows")
+        print(f"Source CSV(s) contain(s) {data.count()} rows")
 
         return data
 

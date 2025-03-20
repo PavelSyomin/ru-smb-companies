@@ -1,8 +1,7 @@
 from typing import List, Optional
 
 from pyspark.sql import DataFrame, Window
-from pyspark.sql.functions import (coalesce, desc, first, last, lead,
-    lower, lpad, row_number, upper, year)
+import pyspark.sql.functions as F
 
 from ..stages.spark_stage import SparkStage
 from ..utils.enums import SourceDatasets, Storages
@@ -94,40 +93,37 @@ class Aggregator(SparkStage):
             + " or ".join(f"region_name ilike '%{region.upper()}%'" for region in excluded_regions)
             + ")"
         )
-        w_for_row_number = (
-            Window
-            .partitionBy(cols_to_check_for_duplicates)
-            .orderBy("data_date")
-        )
-        w_for_end_date = w_for_row_number.rowsBetween(0, Window.unboundedFollowing)
-        w_for_reg_number = (
-            Window
-            .partitionBy(["tin"])
-            .orderBy("data_date")
-            .rowsBetween(0, Window.unboundedFollowing)
-        )
+
+        w_by_tin = Window.partitionBy(["tin"]).orderBy("data_date")
+        w_by_tin_unbounded = w_by_tin.rowsBetween(0, Window.unboundedFollowing)
 
         table = (
             data
             .filter(excluded_regions_condition)
             .withColumns({
-                colname: upper(colname)
+                colname: F.upper(colname)
                 for colname in cols_to_uppercase
             })
             .withColumns({
-                "ind_tin": lpad("ind_tin", 12, "0"),
-                "org_tin": lpad("org_tin", 10, "0"),
+                "ind_tin": F.lpad("ind_tin", 12, "0"),
+                "org_tin": F.lpad("org_tin", 10, "0"),
             })
             .withColumns({
-                "tin": coalesce("ind_tin", "org_tin"),
-                "reg_number": coalesce("ind_number", "org_number"),
+                "tin": F.coalesce("ind_tin", "org_tin"),
+                "reg_number": F.coalesce("ind_number", "org_number"),
+                "hash": F.hash(*cols_to_check_for_duplicates),
+
             })
-            .withColumn("reg_number", first("reg_number", ignorenulls=True).over(w_for_reg_number))
-            .withColumn("row_number", row_number().over(w_for_row_number))
-            .withColumn("end_date", last("data_date").over(w_for_end_date))
-            .filter("row_number = 1")
+            .withColumn("reg_number", F.first("reg_number", ignorenulls=True).over(w_by_tin_unbounded))
+            .withColumn("prev_hash", F.lag("hash", default=0).over(w_by_tin))
+            .withColumn("hash_change", F.col("hash") != F.col("prev_hash"))
+            .withColumn("smb_entity_end_date", F.last("data_date").over(w_by_tin_unbounded))
+            .filter("hash_change = true")
+            .withColumn("end_date", F.lead("data_date").over(w_by_tin))
+            .withColumn("end_date", F.coalesce("end_date", "smb_entity_end_date"))
             .withColumnRenamed("data_date", "start_date")
             .select(*cols_to_select)
+            .orderBy(["tin", "start_date"])
             .cache()
         )
 
@@ -143,12 +139,12 @@ class Aggregator(SparkStage):
         if data is None:
             return
 
-        window = Window.partitionBy("tin", "data_date").orderBy(desc("doc_date"))
+        window = Window.partitionBy("tin", "data_date").orderBy(F.desc("doc_date"))
 
         table = (
             data
             .withColumnRenamed("org_tin", "tin")
-            .withColumn("tin", lpad("tin", 10, "0"))
+            .withColumn("tin", F.lpad("tin", 10, "0"))
         )
 
         if smb_data_file is not None:
@@ -156,9 +152,9 @@ class Aggregator(SparkStage):
 
         table = (
             table
-            .withColumn("row_number", row_number().over(window))
+            .withColumn("row_number", F.row_number().over(window))
             .filter("row_number == 1")
-            .select("tin", year("data_date").alias("year"), "revenue", "expenditure")
+            .select("tin", F.year("data_date").alias("year"), "revenue", "expenditure")
             .orderBy("tin", "year")
             .cache()
         )
@@ -174,12 +170,12 @@ class Aggregator(SparkStage):
         if data is None:
             return
 
-        window = Window.partitionBy("tin", "data_date").orderBy(desc("doc_date"))
+        window = Window.partitionBy("tin", "data_date").orderBy(F.desc("doc_date"))
 
         table = (
             data
             .withColumnRenamed("org_tin", "tin")
-            .withColumn("tin", lpad("tin", 10, "0"))
+            .withColumn("tin", F.lpad("tin", 10, "0"))
         )
 
         if smb_data_file is not None:
@@ -187,9 +183,9 @@ class Aggregator(SparkStage):
 
         table = (
             table
-            .withColumn("row_number", row_number().over(window))
+            .withColumn("row_number", F.row_number().over(window))
             .filter("row_number = 1")
-            .select("tin", year("data_date").alias("year"), "employees_count")
+            .select("tin", F.year("data_date").alias("year"), "employees_count")
             .orderBy("tin", "year")
             .cache()
         )

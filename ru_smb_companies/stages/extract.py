@@ -258,7 +258,7 @@ class Extractor:
         resp = requests.get(url, headers=headers, params=params)
         if resp.status_code != 200:
             print("Cannot get path medatata, see error message below")
-            print(resp.json())
+            print(resp.status_code, resp.json())
             return result
 
         for item in resp.json().get("_embedded", {}).get("items", []):
