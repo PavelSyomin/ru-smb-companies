@@ -28,7 +28,10 @@ class Aggregator(SparkStage):
             )
 
     def _filter_by_tins(self, table: DataFrame, smb_data_file: str) -> DataFrame:
+        print("Filtering by TINs")
+
         smb_data = self._session.read.options(header=True, escape='"').csv(smb_data_file)
+
         tins = smb_data.filter("kind == 1").select("tin")
 
         table = table.join(tins, on="tin", how="leftsemi")
