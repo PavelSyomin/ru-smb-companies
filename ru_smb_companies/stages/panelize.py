@@ -30,13 +30,15 @@ class Panelizer(SparkStage):
         if revexp_file is not None:
             revexp_data = self._read(revexp_file, revexp_agg_schema)
             if revexp_data is not None:
+                print("Joining with revexp data")
                 panel = panel.join(revexp_data, on=["tin", "year"], how="leftouter")
 
         if empl_file is not None:
             empl_data = self._read(empl_file, empl_agg_schema)
             if empl_data is not None:
+                print("Joining with empl data")
                 panel = panel.join(empl_data, on=["tin", "year"], how="leftouter")
 
         panel = panel.orderBy("tin", "year")
 
-        self._write(panel, out_file, sep=";")
+        self._write(panel, out_file)
