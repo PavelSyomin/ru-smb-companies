@@ -355,13 +355,16 @@ def aggregate_revexp(
             file_okay=True,
             readable=True
         )
-    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+    ] = None
 ):
     """
     Aggregate revexp dataset
     """
     a = Aggregator()
-    a(str(in_dir), str(out_file), SourceDatasets.revexp.value, str(smb_data_file))
+    if smb_data_file is not None:
+        smb_data_file = str(smb_data_file)
+
+    a(str(in_dir), str(out_file), SourceDatasets.revexp.value, smb_data_file)
 
 
 @aggregate_app.command("empl", rich_help_panel="Source dataset(s)")
@@ -386,13 +389,16 @@ def aggregate_empl(
             file_okay=True,
             readable=True
         )
-    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+    ] = None
 ):
     """
     Aggregate empl dataset
     """
     a = Aggregator()
-    a(str(in_dir), str(out_file), SourceDatasets.empl.value, str(smb_data_file))
+    if smb_data_file is not None:
+        smb_data_file = str(smb_data_file)
+
+    a(str(in_dir), str(out_file), SourceDatasets.empl.value, smb_data_file)
 
 
 @app.command(rich_help_panel="Stages")

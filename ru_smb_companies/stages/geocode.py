@@ -589,16 +589,22 @@ class Geocoder(SparkStage):
             .orderBy("start_date")
         )
         w_for_end_date = w_for_row_number.rowsBetween(0, Window.unboundedFollowing)
+        w_by_tin = Window.partitionBy(["tin"]).orderBy("start_date")
+        w_by_tin_unbounded = w_by_tin.rowsBetween(0, Window.unboundedFollowing)
 
         data = self._read(in_file, smb_geocoded_schema)
 
         initial_count = data.count()
         deduplicated = (
             data
-            .withColumn("row_number", F.row_number().over(w_for_row_number))
-            .withColumn("end_date", F.last("end_date").over(w_for_end_date))
-            .filter("row_number = 1")
-            .drop("row_number")
+            .withColumn("hash", F.hash(*self.DEDUPLICATION_INDEX))
+            .withColumn("prev_hash", F.lag("hash", default=0).over(w_by_tin))
+            .withColumn("hash_change", F.col("hash") != F.col("prev_hash"))
+            .withColumn("smb_entity_end_date", F.last("end_date").over(w_by_tin_unbounded))
+            .filter("hash_change = true")
+            .withColumn("end_date", F.lead("start_date").over(w_by_tin))
+            .withColumn("end_date", F.coalesce("end_date", "smb_entity_end_date"))
+            .drop("hash", "prev_hash", "hash_change", "smb_entity_end_date")
             .orderBy("tin", "start_date")
         )
         after_count = deduplicated.count()
