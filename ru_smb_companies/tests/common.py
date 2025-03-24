@@ -85,7 +85,7 @@ class MockYdiskAPI:
 
         return MockResponse(
             status_code=202,
-            json={"href": f"operations/{random.randint(1, 1e6)}"}
+            json={"href": f"operations/{random.randint(1, int(1e6))}"}
         )
 
     def get(self, url, headers, params):

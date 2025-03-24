@@ -42,16 +42,16 @@ class SparkStage:
             return None
 
         if path.is_dir():
-            input_files = [str(fn) for fn in path.glob("data-*.csv")]
+            input_files = [str(fn.absolute()) for fn in path.glob("data-*.csv")]
         elif path.suffix in (".csv",):
-            input_files = [str(path)]
+            input_files = [str(path.absolute())]
         else:
             input_files = []
 
         if len(input_files) == 0:
             print("Input path does not contain readable CSV file(s)")
             return None
-
+        
         options = {
             "header": True,
             "escape": '"',

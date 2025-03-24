@@ -307,7 +307,7 @@ def aggregate_all(
             source_dataset=source_dataset.value,
         )
         if source_dataset.value in ("revexp", "empl"):
-            args["smb_data_file"] = str(get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv"))
+            args["smb_data_file"] = str(out_dir / SourceDatasets.smb.value / "agg.csv")
         a(**args)
 
 

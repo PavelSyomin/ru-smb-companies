@@ -30,6 +30,30 @@ smb_schema = StructType([
     StructField("doc_cnt", ShortType(), True),
 ])
 
+smb_aggregated_schema = StructType([
+    StructField("kind", ByteType(), False),
+    StructField("category", ByteType(), False),
+    StructField("tin", StringType(), True),
+    StructField("reg_number", StringType(), True),
+    StructField("first_name", StringType(), True),
+    StructField("last_name", StringType(), True),
+    StructField("patronymic", StringType(), True),
+    StructField("org_name", StringType(), True),
+    StructField("org_short_name", StringType(), True),
+    StructField("region_code", ByteType(), True),
+    StructField("region_name", StringType(), True),
+    StructField("region_type", StringType(), True),
+    StructField("district_name", StringType(), True),
+    StructField("district_type", StringType(), True),
+    StructField("city_name", StringType(), True),
+    StructField("city_type", StringType(), True),
+    StructField("settlement_name", StringType(), True),
+    StructField("settlement_type", StringType(), True),
+    StructField("activity_code_main", StringType(), True),
+    StructField("start_date", DateType(), True),
+    StructField("end_date", DateType(), True),    
+])
+
 smb_geocoded_schema = StructType([
     StructField("tin", StringType(), True),
     StructField("reg_number", StringType(), True),

@@ -5,7 +5,9 @@ import pyspark.sql.functions as F
 
 from ..stages.spark_stage import SparkStage
 from ..utils.enums import SourceDatasets, Storages
-from ..utils.spark_schemas import smb_schema, revexp_schema, empl_schema
+from ..utils.spark_schemas import (
+    smb_schema, smb_aggregated_schema, revexp_schema, empl_schema
+)
 
 
 class Aggregator(SparkStage):
@@ -30,7 +32,7 @@ class Aggregator(SparkStage):
     def _filter_by_tins(self, table: DataFrame, smb_data_file: str) -> DataFrame:
         print("Filtering by TINs")
 
-        smb_data = self._session.read.options(header=True, escape='"').csv(smb_data_file)
+        smb_data = self._read(smb_data_file, smb_aggregated_schema)
 
         tins = smb_data.filter("kind == 1").select("tin")
 
