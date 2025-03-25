@@ -98,6 +98,7 @@ class MockYdiskAPI:
                 return MockResponse(status_code=400)
 
             if "download" in url:
+                path = path.replace("ru-smb-data/download", "")
                 return MockResponse(json={"href": f"data/{path}"})
             else:
                 parts = list(filter(None, path.split("/")))
@@ -150,6 +151,9 @@ class MockYdiskAPI:
         folder[parts[-1]] = {"items": []}
 
         return MockResponse(status_code=201)
+    
+    def clear(self):
+        self._storage = defaultdict(dict)
 
 
 def mock_get(url: str, headers: dict = {}, params: dict = {}, **kwargs):

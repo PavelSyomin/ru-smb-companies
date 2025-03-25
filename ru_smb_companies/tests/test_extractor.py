@@ -146,7 +146,7 @@ def test_extract_smb(tmp_path):
     assert call_result == 2
     assert len(list(out_dir.glob("*.csv"))) == 2
 
-    extracted = pd.read_csv(out_dir / "smb-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
     assert len(extracted) > 0
     assert (
         sorted(extracted.columns)
@@ -217,7 +217,7 @@ def test_extract_revexp(tmp_path):
     assert call_result == 2
     assert len(list(out_dir.glob("*.csv"))) == 2
 
-    extracted = pd.read_csv(out_dir / "revexp-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-revexp-1.csv", dtype=str)
     assert len(extracted) > 0
     assert (
         sorted(extracted.columns)
@@ -246,7 +246,7 @@ def test_extract_empl(tmp_path):
     assert call_result == 2
     assert len(list(out_dir.glob("*.csv"))) == 2
 
-    extracted = pd.read_csv(out_dir / "empl-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-empl-1.csv", dtype=str)
     assert len(extracted) > 0
     assert (
         sorted(extracted.columns)
@@ -278,7 +278,7 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
     assert call_result == 2
     assert len(list(out_dir.glob("*.csv"))) == 2
 
-    extracted = pd.read_csv(out_dir / "smb-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
     assert len(extracted) > 0
     assert (
         sorted(extracted.columns)
@@ -303,7 +303,7 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
         activity_codes=["47", "49"],
     )
 
-    extracted = pd.read_csv(out_dir / "smb-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
     assert all(
         c.startswith("47") or c.startswith("49")
         for c in extracted["activity_code_main"].unique()
@@ -322,7 +322,7 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
         activity_codes=["C"], # latin C rather than cyrillic :)
     )
 
-    extracted = pd.read_csv(out_dir / "smb-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
     assert all(
         int(c.split(".")[0]) in range(10, 34)
         for c in extracted["activity_code_main"].unique()
@@ -344,11 +344,12 @@ def test_extract_ydisk(monkeypatch, tmp_path):
         dict(path="smb"),
     )
 
-    for fn in ("smb-test-data-1.zip", "smb-test-data-2.zip"):
+    data_dir = pathlib.Path(__file__).parent / "data" / "smb"
+    for f in data_dir.glob("*.zip"):
         mock_ydisk_api.post(
             "disk/resources/upload",
             dict(Authorization=f"OAuth token"),
-            dict(path=f"smb/{fn}", url=fn),
+            dict(path=f"smb/{f.name}", url=f.name),
         )
     monkeypatch.setattr(requests, "get", mock_get)
 

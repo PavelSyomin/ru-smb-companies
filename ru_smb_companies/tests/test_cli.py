@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pathlib
 import shutil
 
@@ -5,9 +6,10 @@ import pandas as pd
 import requests
 from typer.testing import CliRunner
 
-from ru_smb_companies.main import app
+from ru_smb_companies.main import app, app_config
+from ru_smb_companies.stages.download import Downloader
 from ru_smb_companies.utils.enums import SourceDatasets
-from .common import mock_get
+from .common import mock_get, mock_post, mock_put, mock_ydisk_api
 
 runner = CliRunner()
 
@@ -134,7 +136,7 @@ def test_extract_all_filter_by_activity_code(monkeypatch, tmp_path):
 
     assert len(list(out_dir.iterdir())) == 3
 
-    extracted = pd.read_csv(out_dir / "smb" / "smb-test-data-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "smb" / "data-test-smb-1.csv", dtype=str)
     assert all(
         c.startswith("47") or c.startswith("49")
         for c in extracted["activity_code_main"].unique()
@@ -333,16 +335,169 @@ def test_process_no_download(monkeypatch, tmp_path):
         dst = tmp_path / "ru-smb-data" / "download" / source_dataset.value
         dst.mkdir(parents=True)
         for f in src.glob("*.zip"):
-            shutil.copy(f, dst / f"data-{f.name}")
+            shutil.copy(f, dst / f.name)
 
     result = runner.invoke(app, ["process"])
     assert result.exit_code == 0
 
     output_dir = tmp_path / "ru-smb-data"
-    p = list(output_dir.walk())
+
+    assert len(list((output_dir / "extract").iterdir())) == 3
+    assert len(list((output_dir / "aggregate").iterdir())) == 3
+    assert len(list((output_dir / "geocode").iterdir())) == 1
+    assert (output_dir / "panelize" / "panel.csv").exists()
+
+def test_process_with_download(monkeypatch, tmp_path):
+    def mock_get_data_urls(self, source_dataset: str):
+        data_dir = pathlib.Path(__file__).parent / "data" / source_dataset
+        return [
+            f"data/{source_dataset}/{f.name}" for f in data_dir.glob("*.zip")
+        ]
+
+    monkeypatch.setattr(Downloader, "_get_data_urls", mock_get_data_urls)
+    monkeypatch.setattr(requests, "get", mock_get)
+    monkeypatch.chdir(tmp_path)
+
+    result = runner.invoke(app, ["process", "--download"])
+    assert result.exit_code == 0
+
+    output_dir = tmp_path / "ru-smb-data"
+
+    assert len(list((output_dir / "download").iterdir())) == 3
     assert len(list((output_dir / "extract").iterdir())) == 3
     assert len(list((output_dir / "aggregate").iterdir())) == 3
     assert len(list((output_dir / "geocode").iterdir())) == 1
     assert (output_dir / "panelize" / "panel.csv").exists()
 
 
+def test_config():
+    result = runner.invoke(app, ["config"])
+    assert result.exit_code == 0
+
+    args = ["config", "--ydisk-token", "test-token", "--storage", "ydisk"]
+    result = runner.invoke(app, args)    
+    assert result.exit_code == 0    
+    assert "Configuration updated" in result.stdout
+
+    result = runner.invoke(app, ["config", "--show"])
+    assert result.exit_code == 0
+    assert "test-token" in result.stdout
+    assert "ydisk" in result.stdout
+
+    args = ["config", "--storage", "local"]
+    result = runner.invoke(app, args)
+    assert result.exit_code == 0
+    assert "Configuration updated" in result.stdout
+
+    result = runner.invoke(app, ["config", "--show"])
+    assert result.exit_code == 0
+    assert "local" in result.stdout
+
+
+def test_download_ydisk(monkeypatch, tmp_path):
+    monkeypatch.setattr(requests, "get", mock_get)
+    monkeypatch.setattr(requests, "post", mock_post)
+    monkeypatch.setattr(requests, "put", mock_put)
+    monkeypatch.setattr(Downloader, "YDISK_DOWNLOAD_TIMEOUT", 0)
+    monkeypatch.chdir(tmp_path)
+
+    mock_ydisk_api.clear()
+    
+    with monkeypatch.context() as m:
+        m.setitem(app_config, "storage", "ydisk")
+        m.setitem(app_config, "ydisk_token", "token")
+
+        result = runner.invoke(app, ["download", "all"])
+
+    assert result.exit_code == 0
+    assert result.stdout.count("Upload task created successfully") == 105
+
+
+def test_extract_ydisk(monkeypatch, tmp_path):
+    monkeypatch.setattr(requests, "get", mock_get)
+    monkeypatch.setattr(requests, "post", mock_post)
+    monkeypatch.setattr(requests, "put", mock_put)
+    monkeypatch.setattr(Downloader, "YDISK_DOWNLOAD_TIMEOUT", 0)
+    monkeypatch.chdir(tmp_path)
+    
+    mock_ydisk_api.clear()
+    for source_dataset in SourceDatasets:
+        mock_ydisk_api.put(
+            "disk/resources",
+            dict(Authorization=f"OAuth token"),
+            dict(path=source_dataset.value),
+        )
+
+        data_dir = pathlib.Path(__file__).parent / "data" / source_dataset.value
+        for fn in data_dir.glob("*.zip"):
+            mock_ydisk_api.post(
+                "disk/resources/upload",
+                dict(Authorization=f"OAuth token"),
+                dict(
+                    path=f"{source_dataset.value}/{fn.name}",
+                    url=fn.name
+                ),
+            ) 
+   
+    with monkeypatch.context() as m:
+        m.setitem(app_config, "storage", "ydisk")
+        m.setitem(app_config, "ydisk_token", "token")
+
+        result = runner.invoke(app, ["extract", "all", "--in-dir", "."])
+
+    assert result.exit_code == 0
+    assert result.stdout.count("Completed in") == 6
+
+    assert len(list((tmp_path / "ru-smb-data" / "extract").iterdir())) == 3
+    assert len(list((tmp_path / "ru-smb-data" / "extract" / "smb").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "ru-smb-data" / "extract" / "revexp").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "ru-smb-data" / "extract" / "empl").glob("*.csv"))) == 2
+
+
+def test_process_ydisk_no_download(monkeypatch, tmp_path):
+    monkeypatch.setattr(requests, "get", mock_get)
+    monkeypatch.setattr(requests, "post", mock_post)
+    monkeypatch.setattr(requests, "put", mock_put)
+    monkeypatch.setattr(Downloader, "YDISK_DOWNLOAD_TIMEOUT", 0)
+    monkeypatch.chdir(tmp_path)
+   
+    mock_ydisk_api.clear()
+    for top_level_path in ("ru-smb-data", "ru-smb-data/download"):
+        mock_ydisk_api.put(
+            "disk/resources",
+            dict(Authorization=f"OAuth token"),
+            dict(path=top_level_path),
+        )
+
+    for source_dataset in SourceDatasets:
+        mock_ydisk_api.put(
+            "disk/resources",
+            dict(Authorization=f"OAuth token"),
+            dict(path=f"ru-smb-data/download/{source_dataset.value}"),
+        )
+
+        data_dir = pathlib.Path(__file__).parent / "data" / source_dataset.value
+        upload_dir = f"ru-smb-data/download/{source_dataset.value}"
+        for fn in data_dir.glob("*.zip"):
+            mock_ydisk_api.post(
+                "disk/resources/upload",
+                dict(Authorization=f"OAuth token"),
+                dict(
+                    path=f"{upload_dir}/{fn.name}",
+                    url=fn.name
+                ),
+            ) 
+   
+    with monkeypatch.context() as m:
+        m.setitem(app_config, "storage", "ydisk")
+        m.setitem(app_config, "ydisk_token", "token")
+
+        result = runner.invoke(app, ["process"])
+
+    assert result.exit_code == 0
+    assert result.stdout.count("Completed in") == 6
+
+    assert len(list((tmp_path / "ru-smb-data" / "extract").iterdir())) == 3
+    assert len(list((tmp_path / "ru-smb-data" / "aggregate").iterdir())) == 3
+    assert len(list((tmp_path / "ru-smb-data" / "geocode").iterdir())) == 1
+    assert (tmp_path / "ru-smb-data" / "panelize" / "panel.csv").exists()
