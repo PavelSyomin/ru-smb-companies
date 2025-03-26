@@ -8,7 +8,7 @@ Install Python and dependencies (see the list below), download this repository, 
 
 ### Dataset of all companies with auto-download
 
-`python -m rmsp --download`
+`python -m rmsp process --download`
 
 This will download all source data from FTS servers and process it making a huge resulting table with *all* Russian SMB companies. Runtime is large (up to 2 days), disk space required is about 500 Gb.
 
@@ -16,7 +16,7 @@ This will download all source data from FTS servers and process it making a huge
 
 To reduce disk usage and runtime, you'd better filter by activity code because you probably don't need the whole dataset but instead want to focus on some economic areas.
 
-`python -m rmsp --download --ac 10.10 --ac D`
+`python -m rmsp process --download --ac 10.10 --ac D`
 
 This will filter source data leaving only companies with main activity code starting with 10.10 or in group D of the state classifier (OCVED, see `rmsp/assets/activity_codes_classifier.csv`).
 
