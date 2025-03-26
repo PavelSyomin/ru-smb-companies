@@ -2,7 +2,7 @@ from pyspark.sql.types import (ByteType, DateType, FloatType, IntegerType, Short
     StringType, StructField, StructType)
 
 
-smb_schema = StructType([
+sme_schema = StructType([
     StructField("kind", ByteType(), False),
     StructField("category", ByteType(), False),
     StructField("reestr_date", DateType(), False),
@@ -30,7 +30,7 @@ smb_schema = StructType([
     StructField("doc_cnt", ShortType(), True),
 ])
 
-smb_aggregated_schema = StructType([
+sme_aggregated_schema = StructType([
     StructField("kind", ByteType(), False),
     StructField("category", ByteType(), False),
     StructField("tin", StringType(), True),
@@ -54,7 +54,7 @@ smb_aggregated_schema = StructType([
     StructField("end_date", DateType(), True),    
 ])
 
-smb_geocoded_schema = StructType([
+sme_geocoded_schema = StructType([
     StructField("tin", StringType(), True),
     StructField("reg_number", StringType(), True),
     StructField("kind", ByteType(), False),

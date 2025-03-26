@@ -26,7 +26,7 @@ def test_empty_input_directory(tmp_path):
 
     aggregator = Aggregator()
 
-    aggregator(str(in_dir), str(out_file), SourceDatasets.smb.value)
+    aggregator(str(in_dir), str(out_file), SourceDatasets.sme.value)
     assert not out_file.exists()
 
     aggregator(str(in_dir), str(out_file), SourceDatasets.revexp.value)
@@ -36,13 +36,13 @@ def test_empty_input_directory(tmp_path):
     assert not out_file.exists()
 
 
-def test_aggregate_smb(tmp_path):
-    in_dir = pathlib.Path(__file__).parent / "data/smb"
+def test_aggregate_sme(tmp_path):
+    in_dir = pathlib.Path(__file__).parent / "data/sme"
     out_file = tmp_path / "aggregated.csv"
 
     aggregator = Aggregator()
 
-    aggregator(str(in_dir), str(out_file), SourceDatasets.smb.value)
+    aggregator(str(in_dir), str(out_file), SourceDatasets.sme.value)
 
     df = pd.read_csv(out_file, dtype=str)
 
@@ -164,8 +164,8 @@ def test_aggregate_empl(tmp_path):
 
 
 def test_aggregate_revexp_empl_filter_by_tin(tmp_path):
-    in_dir_smb = pathlib.Path(__file__).parent / "data/smb"
-    out_file_smb = tmp_path / "aggregated_smb.csv"
+    in_dir_sme = pathlib.Path(__file__).parent / "data/sme"
+    out_file_sme = tmp_path / "aggregated_sme.csv"
 
     in_dir_revexp = pathlib.Path(__file__).parent / "data/revexp"
     out_file_revexp = tmp_path / "aggregated_revexp.csv"
@@ -175,9 +175,9 @@ def test_aggregate_revexp_empl_filter_by_tin(tmp_path):
 
     aggregator = Aggregator()
 
-    aggregator(str(in_dir_smb), str(out_file_smb), SourceDatasets.smb.value)
-    aggregator(str(in_dir_revexp), str(out_file_revexp), SourceDatasets.revexp.value, str(out_file_smb))
-    aggregator(str(in_dir_empl), str(out_file_empl), SourceDatasets.empl.value, str(out_file_smb))
+    aggregator(str(in_dir_sme), str(out_file_sme), SourceDatasets.sme.value)
+    aggregator(str(in_dir_revexp), str(out_file_revexp), SourceDatasets.revexp.value, str(out_file_sme))
+    aggregator(str(in_dir_empl), str(out_file_empl), SourceDatasets.empl.value, str(out_file_sme))
 
     revexp_df = pd.read_csv(out_file_revexp, dtype=str)
     assert len(revexp_df) == 0

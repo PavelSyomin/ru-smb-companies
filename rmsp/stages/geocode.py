@@ -1,9 +1,8 @@
 import pathlib
 import shutil
 import tempfile
-from typing import Optional, Union
+from typing import Union
 
-from fuzzywuzzy import fuzz, process
 import numpy as np
 import pandas as pd
 from pyspark.sql import DataFrame, Window
@@ -12,7 +11,7 @@ import pyspark.sql.functions as F
 from ..stages.spark_stage import SparkStage
 from ..assets import get_asset_path
 from ..utils.regions import Regions
-from ..utils.spark_schemas import smb_geocoded_schema
+from ..utils.spark_schemas import sme_geocoded_schema
 
 
 def _join_name_and_type(n: Union[str, float], t: Union[str, float]) -> str:
@@ -592,7 +591,7 @@ class Geocoder(SparkStage):
         w_by_tin = Window.partitionBy(["tin"]).orderBy("start_date")
         w_by_tin_unbounded = w_by_tin.rowsBetween(0, Window.unboundedFollowing)
 
-        data = self._read(in_file, smb_geocoded_schema)
+        data = self._read(in_file, sme_geocoded_schema)
 
         initial_count = data.count()
         deduplicated = (
@@ -600,11 +599,11 @@ class Geocoder(SparkStage):
             .withColumn("hash", F.hash(*self.DEDUPLICATION_INDEX))
             .withColumn("prev_hash", F.lag("hash", default=0).over(w_by_tin))
             .withColumn("hash_change", F.col("hash") != F.col("prev_hash"))
-            .withColumn("smb_entity_end_date", F.last("end_date").over(w_by_tin_unbounded))
+            .withColumn("sme_entity_end_date", F.last("end_date").over(w_by_tin_unbounded))
             .filter("hash_change = true")
             .withColumn("end_date", F.lead("start_date").over(w_by_tin))
-            .withColumn("end_date", F.coalesce("end_date", "smb_entity_end_date"))
-            .drop("hash", "prev_hash", "hash_change", "smb_entity_end_date")
+            .withColumn("end_date", F.coalesce("end_date", "sme_entity_end_date"))
+            .drop("hash", "prev_hash", "hash_change", "sme_entity_end_date")
             .orderBy("tin", "start_date")
         )
         after_count = deduplicated.count()

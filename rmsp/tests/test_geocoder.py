@@ -8,7 +8,7 @@ from ..stages.geocode import Geocoder
 
 
 def test_geocode(tmp_path):
-    in_file = pathlib.Path(__file__).parent / "data/smb/test-aggregated.csv"
+    in_file = pathlib.Path(__file__).parent / "data/sme/test-aggregated.csv"
     out_file = tmp_path / "geocoded.csv"
 
     geocoder = Geocoder()

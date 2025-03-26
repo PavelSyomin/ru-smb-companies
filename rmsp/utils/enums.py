@@ -2,7 +2,7 @@ import enum
 
 
 class SourceDatasets(enum.Enum):
-    smb = "smb"
+    sme = "sme"
     revexp = "revexp"
     empl = "empl"
 

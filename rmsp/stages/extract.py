@@ -1,4 +1,3 @@
-from collections import namedtuple
 import functools
 import json
 import multiprocessing
@@ -145,7 +144,7 @@ class Extractor:
             _make_dataframe,
             elements=self._get_elements(source_dataset),
             target_codes=self._get_activity_codes(activity_codes, source_dataset),
-            debug=True if source_dataset in (SourceDatasets.smb.value,) else False
+            debug=True if source_dataset in (SourceDatasets.sme.value,) else False
         )
 
         processed_count = 0
@@ -314,7 +313,7 @@ class Extractor:
 
     def _get_activity_codes(
             self, codes_from_input: List[str], source_dataset: str) -> Optional[List[str]]:
-        if source_dataset not in (SourceDatasets.smb.value, ):
+        if source_dataset not in (SourceDatasets.sme.value, ):
             return None
 
         print("Getting filters by activity code(s)")

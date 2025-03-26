@@ -1,10 +1,10 @@
 [tool.poetry]
-name = "ru-smb-companies"
-version = "0.6.4"
-description = "A command-line tool to get a georeferenced dataset of Russian small and medium-sized businesses using open data of Federal Tax Service"
+name = "rmsp"
+version = "1.0.0-beta.1"
+description = "A command-line tool to get a georeferenced dataset of Russian small and medium-sized enterprises (SME) from open data of Federal Tax Service"
 authors = ["Pavel Syomin <pas.ntg@gmail.com>"]
 readme = "README.md"
-packages = [{include = "ru_smb_companies"}]
+packages = [{include = "rmsp"}]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -20,7 +20,7 @@ fuzzywuzzy = "^0.18.0"
 python-levenshtein = "^0.23.0"
 
 [tool.poetry.scripts]
-ru-smb-companies = "ru_smb_companies.main:app"
+rmsp = "rmsp.main:app"
 
 
 [tool.poetry.group.test.dependencies]

@@ -34,10 +34,10 @@ def test_local_download(monkeypatch, tmp_path):
 
     monkeypatch.setattr(requests, "get", mock_get)
 
-    smb_download_dir = tmp_path / "smb"
-    downloader(SourceDatasets.smb.value, str(smb_download_dir))
+    sme_download_dir = tmp_path / "sme"
+    downloader(SourceDatasets.sme.value, str(sme_download_dir))
 
-    downloaded_files = list(smb_download_dir.glob("*.zip"))
+    downloaded_files = list(sme_download_dir.glob("*.zip"))
 
     assert len(set(downloaded_files)) == 103
 
@@ -61,18 +61,18 @@ def test_local_download_no_reload(monkeypatch, tmp_path):
 
     monkeypatch.setattr(requests, "get", mock_get)
 
-    smb_download_dir = tmp_path / "smb"
-    downloader(SourceDatasets.smb.value, str(smb_download_dir))
+    sme_download_dir = tmp_path / "sme"
+    downloader(SourceDatasets.sme.value, str(sme_download_dir))
 
-    downloaded_files = list(smb_download_dir.glob("*.zip"))
+    downloaded_files = list(sme_download_dir.glob("*.zip"))
 
     assert len(set(downloaded_files)) == 103
 
     # Should not be called
     monkeypatch.setattr(MockResponse, "iter_content", None)
-    downloader(SourceDatasets.smb.value, str(smb_download_dir))
+    downloader(SourceDatasets.sme.value, str(sme_download_dir))
 
-    downloaded_files = list(smb_download_dir.glob("*.zip"))
+    downloaded_files = list(sme_download_dir.glob("*.zip"))
 
     assert len(set(downloaded_files)) == 103
 
@@ -85,10 +85,10 @@ def test_ydisk_download(monkeypatch, tmp_path):
     monkeypatch.setattr(requests, "put", mock_put)
     monkeypatch.setattr(downloader, "YDISK_DOWNLOAD_TIMEOUT", 0)
 
-    smb_download_dir = tmp_path / "smb"
-    downloader(SourceDatasets.smb.value, str(smb_download_dir))
+    sme_download_dir = tmp_path / "sme"
+    downloader(SourceDatasets.sme.value, str(sme_download_dir))
 
-    downloaded_files = downloader._get_existing_files(str(smb_download_dir))
+    downloaded_files = downloader._get_existing_files(str(sme_download_dir))
 
     assert len(set(downloaded_files)) == 103
 

@@ -1,26 +1,24 @@
-import pathlib
 from typing import Optional
 
-from pyspark.sql import DataFrame, Window
 import pyspark.sql.functions as F
 
 from ..stages.spark_stage import SparkStage
-from ..utils.spark_schemas import (smb_geocoded_schema, revexp_agg_schema,
+from ..utils.spark_schemas import (sme_geocoded_schema, revexp_agg_schema,
     empl_agg_schema)
 
 
 class Panelizer(SparkStage):
     SPARK_APP_NAME = "Panel Table Maker"
 
-    def __call__(self, smb_file: str, out_file: str,
+    def __call__(self, sme_file: str, out_file: str,
                  revexp_file: Optional[str] = None,
                  empl_file: Optional[str] = None):
-        smb_data = self._read(smb_file, smb_geocoded_schema)
-        if smb_data is None:
+        sme_data = self._read(sme_file, sme_geocoded_schema)
+        if sme_data is None:
             return
 
         panel = (
-            smb_data
+            sme_data
             .withColumn(
                 "year",
                 F.explode(F.sequence(F.year("start_date"), F.year("end_date")))

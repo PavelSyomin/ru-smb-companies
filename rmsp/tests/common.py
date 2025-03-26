@@ -98,7 +98,7 @@ class MockYdiskAPI:
                 return MockResponse(status_code=400)
 
             if "download" in url:
-                path = path.replace("ru-smb-data/download", "")
+                path = path.replace("rmsp-data/download", "")
                 return MockResponse(json={"href": f"data/{path}"})
             else:
                 parts = list(filter(None, path.split("/")))
@@ -160,7 +160,7 @@ def mock_get(url: str, headers: dict = {}, params: dict = {}, **kwargs):
     if "data" in url and "zip" in url:
         resp = MockResponse(file_path=url)
     elif "rsmp" in url:
-        with open(pathlib.Path(__file__).parent / "data/smb/smb.html") as f:
+        with open(pathlib.Path(__file__).parent / "data/sme/sme.html") as f:
             text = f.read()
         resp = MockResponse(text=text)
     elif "revexp" in url:

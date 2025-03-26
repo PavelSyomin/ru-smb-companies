@@ -8,14 +8,14 @@ from ..stages.panelize import Panelizer
 
 
 def test_panelize(tmp_path):
-    smb_file = pathlib.Path(__file__).parent / "data/smb/test-geocoded.csv"
+    sme_file = pathlib.Path(__file__).parent / "data/sme/test-geocoded.csv"
     revexp_file = pathlib.Path(__file__).parent / "data/revexp/test-aggregated.csv"
     empl_file = pathlib.Path(__file__).parent / "data/empl/test-aggregated.csv"
     out_file = tmp_path / "panel.csv"
 
     panelizer = Panelizer()
 
-    panelizer(str(smb_file), str(out_file), str(revexp_file), str(empl_file))
+    panelizer(str(sme_file), str(out_file), str(revexp_file), str(empl_file))
 
     df = pd.read_csv(out_file, dtype=str)
 
@@ -32,12 +32,12 @@ def test_panelize(tmp_path):
 
 
 def test_panelize_no_revexp_empl(tmp_path):
-    smb_file = pathlib.Path(__file__).parent / "data/smb/test-geocoded.csv"
+    sme_file = pathlib.Path(__file__).parent / "data/sme/test-geocoded.csv"
     out_file = tmp_path / "panel.csv"
 
     panelizer = Panelizer()
 
-    panelizer(str(smb_file), str(out_file))
+    panelizer(str(sme_file), str(out_file))
 
     df = pd.read_csv(out_file, dtype=str)
 

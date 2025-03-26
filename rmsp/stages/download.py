@@ -17,7 +17,7 @@ class Downloader:
     }
     HOST = "https://cloud-api.yandex.net/v1/"
     OPENDATA_URLS = {
-        SourceDatasets.smb.value: "https://www.nalog.gov.ru/opendata/7707329152-rsmp/",
+        SourceDatasets.sme.value: "https://www.nalog.gov.ru/opendata/7707329152-rsmp/",
         SourceDatasets.revexp.value: "https://www.nalog.gov.ru/opendata/7707329152-revexp/",
         SourceDatasets.empl.value: "https://www.nalog.gov.ru/opendata/7707329152-sshr2019/",
     }
@@ -70,7 +70,7 @@ class Downloader:
         }
 
     def _get_default_download_dir(self, source_dataset: str) -> str:
-        return f"ru-smb-data/download/{source_dataset}"
+        return f"rmsp-data/download/{source_dataset}"
 
     def _get_data_urls(self, source_dataset: str) -> List[str]:
         url = self.OPENDATA_URLS[source_dataset]

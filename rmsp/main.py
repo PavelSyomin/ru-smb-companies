@@ -1,4 +1,3 @@
-import enum
 import json
 import pathlib
 from typing import List, Optional
@@ -6,18 +5,21 @@ from typing_extensions import Annotated
 
 import typer
 
-from ru_smb_companies.stages.aggregate import Aggregator
-from ru_smb_companies.stages.download import Downloader
-from ru_smb_companies.stages.extract import Extractor
-from ru_smb_companies.stages.geocode import Geocoder
-from ru_smb_companies.stages.panelize import Panelizer
-from ru_smb_companies.utils.enums import SourceDatasets, StageNames, Storages
+from rmsp.stages.aggregate import Aggregator
+from rmsp.stages.download import Downloader
+from rmsp.stages.extract import Extractor
+from rmsp.stages.geocode import Geocoder
+from rmsp.stages.panelize import Panelizer
+from rmsp.utils.enums import SourceDatasets, StageNames, Storages
 
 
-APP_NAME = "ru_smb_companies"
+APP_NAME = "rmsp"
 
 app = typer.Typer(
-    help="Create dataset of Russian SMB companies (and individuals) based on Federal Tax Service's open data",
+    help=(
+        "A tool to create a geocoded CSV dataset of Russian small and medium-sized "
+        "enterprises from Federal Tax Service (FTS) open data"
+    ),
     rich_markup_mode="markdown"
 )
 download_app = typer.Typer()
@@ -26,14 +28,14 @@ aggregate_app = typer.Typer()
 app.add_typer(
     download_app,
     name="download",
-    help="Download source dataset(s) from FTS open data server (stage 1)",
+    help="Download source zipped dataset(s) from FTS open data server (stage 1)",
     rich_help_panel="Stages",
     no_args_is_help=True
 )
 app.add_typer(
     extract_app,
     name="extract",
-    help="Extract data from downloaded source datasets (stage 2)",
+    help="Extract data from downloaded source zipped datasets to CSV files (stage 2)",
     rich_help_panel="Stages",
     no_args_is_help=True
 )
@@ -64,7 +66,7 @@ def get_default_path(
     source_dataset: Optional[str] = None,
     filename: Optional[str] = None,
 ) -> pathlib.Path:
-    path = pathlib.Path("ru-smb-data") / stage_name
+    path = pathlib.Path("rmsp-data") / stage_name
     if source_dataset is not None:
         path = path / source_dataset
     if filename is not None:
@@ -94,7 +96,7 @@ def download_all(
     download_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to the directory to store downloaded files. Sub-directories *smb*, *revexp*, and *empl* for respective datasets will be created automatically"
+            help="Path to the directory to store downloaded files. Sub-directories *sme*, *revexp*, and *empl* for respective datasets will be created automatically"
         )
     ] = get_default_path(StageNames.download.value)
 ):
@@ -110,20 +112,20 @@ def download_all(
         d(**args)
 
 
-@download_app.command("smb", rich_help_panel="Source dataset(s)")
-def download_smb(
+@download_app.command("sme", rich_help_panel="Source dataset(s)")
+def download_sme(
     download_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to the directory to store downloaded files"
         )
-    ] = get_default_path(StageNames.download.value, SourceDatasets.smb.value)
+    ] = get_default_path(StageNames.download.value, SourceDatasets.sme.value)
 ):
     """
-    Download **s**mall&**m**edium-sized **b**usinesses registry
+    Download **s**mall&**m**edium-sized **e**nterprises registry
     """
     d = get_downloader(app_config)
-    d(SourceDatasets.smb.value, str(download_dir))
+    d(SourceDatasets.sme.value, str(download_dir))
 
 
 @download_app.command("revexp", rich_help_panel="Source dataset(s)")
@@ -163,13 +165,13 @@ def extract_all(
     in_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to downloaded source files. Usually the same as *download_dir* on download stage. Expected to contain *smb*, *revexp*, *empl* sub-folders"
+            help="Path to downloaded source files. Usually the same as *download_dir* on download stage. Expected to contain *sme*, *revexp*, *empl* sub-folders"
         )
     ] = get_default_path(StageNames.download.value),
     out_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to save extracted CSV files. Sub-folders *smb*, *revexp*, *empl* for respective datasets will be created automatically"
+            help="Path to save extracted CSV files. Sub-folders *sme*, *revexp*, *empl* for respective datasets will be created automatically"
         )
     ] = get_default_path(StageNames.extract.value),
     clear: Annotated[
@@ -178,7 +180,7 @@ def extract_all(
     ac: Annotated[
         Optional[List[str]],
         typer.Option(
-            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
+            help="**A**ctivity **c**ode(s) to filter SME source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
             show_default="no filtering by activity code(s)"
         )
     ] = None,
@@ -198,37 +200,37 @@ def extract_all(
         e(**args)
 
 
-@extract_app.command("smb", rich_help_panel="Source dataset(s)")
-def extract_smb(
+@extract_app.command("sme", rich_help_panel="Source dataset(s)")
+def extract_sme(
     in_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to downloaded source files. Usually the same as *download_dir* on download stage"
         )
-    ] = get_default_path(StageNames.download.value, SourceDatasets.smb.value),
+    ] = get_default_path(StageNames.download.value, SourceDatasets.sme.value),
     out_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to save extracted CSV files"
         )
-    ] = get_default_path(StageNames.extract.value, SourceDatasets.smb.value),
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.sme.value),
     clear: Annotated[
         bool, typer.Option(help="Clear *out_dir* (see above) before processing")
     ] = False,
     ac: Annotated[
         Optional[List[str]],
         typer.Option(
-            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
+            help="**A**ctivity **c**ode(s) to filter SME source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
             show_default="no filtering by activity code(s)"
         )
     ] = None,
 ):
     """
-    Extract data from downloaded *zip* archives of SMB registry to *csv* files,
+    Extract data from downloaded *zip* archives of SME registry to *csv* files,
     optionally filtering by activity code (stage 2)
     """
     e = get_extractor(app_config)
-    e(str(in_dir), str(out_dir), SourceDatasets.smb.value, clear, ac)
+    e(str(in_dir), str(out_dir), SourceDatasets.sme.value, clear, ac)
 
 
 @extract_app.command("revexp", rich_help_panel="Source dataset(s)")
@@ -286,13 +288,13 @@ def aggregate_all(
     in_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage. Expected to contain *smb*, *revexp*, *empl* sub-folders"
+            help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage. Expected to contain *sme*, *revexp*, *empl* sub-folders"
         )
     ] = get_default_path(StageNames.extract.value),
     out_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to save aggregated CSV files. Sub-folders *smb*, *revexp*, *empl* for respective datasets will be created automatically"
+            help="Path to save aggregated CSV files. Sub-folders *sme*, *revexp*, *empl* for respective datasets will be created automatically"
         )
     ] = get_default_path(StageNames.aggregate.value)
 ):
@@ -307,30 +309,30 @@ def aggregate_all(
             source_dataset=source_dataset.value,
         )
         if source_dataset.value in ("revexp", "empl"):
-            args["smb_data_file"] = str(out_dir / SourceDatasets.smb.value / "agg.csv")
+            args["sme_data_file"] = str(out_dir / SourceDatasets.sme.value / "agg.csv")
         a(**args)
 
 
-@aggregate_app.command("smb", rich_help_panel="Source dataset(s)")
-def aggregate_smb(
+@aggregate_app.command("sme", rich_help_panel="Source dataset(s)")
+def aggregate_sme(
     in_dir: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to extracted CSV files. Usually the same as *out_dir* on extract stage"
         )
-    ] = get_default_path(StageNames.extract.value, SourceDatasets.smb.value),
+    ] = get_default_path(StageNames.extract.value, SourceDatasets.sme.value),
     out_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to save aggregated CSV files"
         )
-    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv")
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.sme.value, "agg.csv")
 ):
     """
-    Aggregate SMB dataset
+    Aggregate SME dataset
     """
     a = Aggregator()
-    a(str(in_dir), str(out_file), SourceDatasets.smb.value)
+    a(str(in_dir), str(out_file), SourceDatasets.sme.value)
 
 
 @aggregate_app.command("revexp", rich_help_panel="Source dataset(s)")
@@ -347,10 +349,10 @@ def aggregate_revexp(
             help="Path to save aggregated CSV files"
         )
     ] = get_default_path(StageNames.aggregate.value, SourceDatasets.revexp.value, "agg.csv"),
-    smb_data_file: Annotated[
+    sme_data_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to **already processed smb file** that is used to filter aggregated values in revexp or empl file",
+            help="Path to **already processed SME file** that is used to filter aggregated values in revexp or empl file",
             exists=True,
             file_okay=True,
             readable=True
@@ -361,10 +363,10 @@ def aggregate_revexp(
     Aggregate revexp dataset
     """
     a = Aggregator()
-    if smb_data_file is not None:
-        smb_data_file = str(smb_data_file)
+    if sme_data_file is not None:
+        sme_data_file = str(sme_data_file)
 
-    a(str(in_dir), str(out_file), SourceDatasets.revexp.value, smb_data_file)
+    a(str(in_dir), str(out_file), SourceDatasets.revexp.value, sme_data_file)
 
 
 @aggregate_app.command("empl", rich_help_panel="Source dataset(s)")
@@ -381,10 +383,10 @@ def aggregate_empl(
             help="Path to save aggregated CSV files"
         )
     ] = get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv"),
-    smb_data_file: Annotated[
+    sme_data_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to **already processed smb file** that is used to filter aggregated values in revexp or empl file",
+            help="Path to **already processed SME file** that is used to filter aggregated values in revexp or empl file",
             exists=True,
             file_okay=True,
             readable=True
@@ -395,10 +397,10 @@ def aggregate_empl(
     Aggregate empl dataset
     """
     a = Aggregator()
-    if smb_data_file is not None:
-        smb_data_file = str(smb_data_file)
+    if sme_data_file is not None:
+        sme_data_file = str(sme_data_file)
 
-    a(str(in_dir), str(out_file), SourceDatasets.empl.value, smb_data_file)
+    a(str(in_dir), str(out_file), SourceDatasets.empl.value, sme_data_file)
 
 
 @app.command(rich_help_panel="Stages")
@@ -406,21 +408,21 @@ def geocode(
     in_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
-            help="Path to a CSV file. Usually the same as *out_file* on aggregate smb stage. CSV file must include at least *region_name*, *district_name*, *city_name*, *settlement_name* fields",
+            help="Path to a CSV file. Usually the same as *out_file* on aggregate sme stage. CSV file must include at least *region_name*, *district_name*, *city_name*, *settlement_name* fields",
             exists=True,
             file_okay=True,
             readable=True
         )
-    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.smb.value, "agg.csv"),
+    ] = get_default_path(StageNames.aggregate.value, SourceDatasets.sme.value, "agg.csv"),
     out_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to save geocoded CSV file"
         )
-    ] = get_default_path(StageNames.geocode.value, SourceDatasets.smb.value, "geocoded.csv")
+    ] = get_default_path(StageNames.geocode.value, SourceDatasets.sme.value, "geocoded.csv")
 ):
     """
-    Geocode SMB aggregated data (stage 4) OR geocode *any other dataset with a similar structure of address fields*
+    Geocode SME aggregated data (stage 4) OR geocode *any other dataset with a similar structure of address fields*
     """
     g = Geocoder()
     g(str(in_file), str(out_file))
@@ -428,7 +430,7 @@ def geocode(
 
 @app.command(rich_help_panel="Stages")
 def panelize(
-    smb_file: Annotated[
+    sme_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
             help="Path to geocoded CSV file. Usually the same as *out_file* on geocode stage",
@@ -436,7 +438,7 @@ def panelize(
             file_okay=True,
             readable=True
         )
-    ] = get_default_path(StageNames.geocode.value, SourceDatasets.smb.value, "geocoded.csv"),
+    ] = get_default_path(StageNames.geocode.value, SourceDatasets.sme.value, "geocoded.csv"),
     out_file: Annotated[
         Optional[pathlib.Path],
         typer.Option(
@@ -463,10 +465,10 @@ def panelize(
     ] = get_default_path(StageNames.aggregate.value, SourceDatasets.empl.value, "agg.csv"),
 ):
     """
-    Make panel dataset based on geocoded SMB data and aggregated revexp and empl tables (stage 5)
+    Make panel dataset based on geocoded SME data and aggregated revexp and empl tables (stage 5)
     """
     p = Panelizer()
-    p(str(smb_file), str(out_file), str(revexp_file), str(empl_file))
+    p(str(sme_file), str(out_file), str(revexp_file), str(empl_file))
 
 
 @app.command(rich_help_panel="Configuration", no_args_is_help=True)
@@ -522,13 +524,13 @@ def process(
     download: Annotated[
         bool,
         typer.Option(
-            help="Download source datasets before processing. If False, the application expects that source datasets have already been downloaded to *ru-smb-data/download/smb*, *ru-smb-data/download/revexp*, and ru-smb-data/download/empl*"
+            help="Download source datasets before processing. If False, the application expects that source datasets have already been downloaded to *rmsp-data/download/sme*, *rmsp-data/download/revexp*, and rmsp-data/download/empl*"
         )
     ] = False,
     ac: Annotated[
         Optional[List[str]],
         typer.Option(
-            help="**A**ctivity **c**ode(s) to filter smb source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
+            help="**A**ctivity **c**ode(s) to filter SME source dataset by. Can be either activity group code, e.g. *--ac A*, or exact digit code, e.g. *--ac 01.10*. Multiple codes or groups can be specified by multiple *ac* options, e.g. *--ac 01.10 --ac 69.20*. Top-level codes include child codes, i.e. *--ac 01.10* selects 01.10.01, 01.10.02, 01.10.10 (if any children are present). If not specified, filtering is disabled",
             show_default="no filtering by activity code(s)"
         )
     ] = None

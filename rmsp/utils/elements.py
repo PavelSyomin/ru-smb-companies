@@ -1,5 +1,5 @@
 elements = {
-    "smb": {
+    "sme": {
         "@ВидСубМСП": "kind",
         "@КатСубМСП": "category",
         "@ДатаВклМСП": "reestr_date",

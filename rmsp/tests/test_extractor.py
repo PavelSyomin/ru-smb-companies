@@ -20,7 +20,7 @@ def test_empty_input_directory(tmp_path):
 
     extractor = Extractor(Storages.local.value)
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
 
     assert call_result is None
 
@@ -36,7 +36,7 @@ def test_no_zip_files_in_input_directory(tmp_path):
 
     extractor = Extractor(Storages.local.value)
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
 
     assert call_result is None
 
@@ -59,7 +59,7 @@ def test_clear_out_dir(monkeypatch, tmp_path):
     monkeypatch.setattr("builtins.input", lambda prompt: "yes")
 
     call_result = extractor(
-        str(in_dir), str(out_dir), SourceDatasets.smb.value, clear=True
+        str(in_dir), str(out_dir), SourceDatasets.sme.value, clear=True
     )
 
     assert input("prompt") == "yes"
@@ -89,7 +89,7 @@ def test_record_history(tmp_path):
 
     extractor = Extractor(Storages.local.value)
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
 
     assert call_result == 10
     assert len(list(out_dir.iterdir())) == 1 # only history.json
@@ -110,7 +110,7 @@ def test_use_history(tmp_path):
 
     extractor = Extractor(Storages.local.value)
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
 
     assert call_result == 5
     assert len(list(out_dir.iterdir())) == 1 # only history.json
@@ -122,7 +122,7 @@ def test_use_history(tmp_path):
         with zipfile.ZipFile(in_dir / f"sample_input_file_{i}.zip", "w") as zf:
             zf.writestr("test.txt", "test_content")
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
 
     assert call_result == 5
     assert len(list(out_dir.iterdir())) == 1 # only history.json
@@ -130,27 +130,27 @@ def test_use_history(tmp_path):
     with open(out_dir / "history.json") as f:
         assert len(json.load(f)) == 10
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
     assert call_result == 0
 
 
-def test_extract_smb(tmp_path):
-    in_dir = pathlib.Path(__file__).parent / "data/smb"
+def test_extract_sme(tmp_path):
+    in_dir = pathlib.Path(__file__).parent / "data/sme"
     out_dir = tmp_path / "results"
     out_dir.mkdir()
 
     extractor = Extractor(Storages.local.value)
 
-    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.smb.value)
+    call_result = extractor(str(in_dir), str(out_dir), SourceDatasets.sme.value)
 
     assert call_result == 2
     assert len(list(out_dir.glob("*.csv"))) == 2
 
-    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-sme-1.csv", dtype=str)
     assert len(extracted) > 0
     assert (
         sorted(extracted.columns)
-        == sorted(list(elements["smb"].values()) + ["file_id", "doc_cnt"])
+        == sorted(list(elements["sme"].values()) + ["file_id", "doc_cnt"])
     )
 
     sample_row = extracted.loc[extracted["ind_tin"] == "523400993387"].iloc[0]
@@ -260,8 +260,8 @@ def test_extract_empl(tmp_path):
     assert sample_row["doc_date"] == "31.03.2020"
 
 
-def test_extract_smb_filter_by_activity_code(tmp_path):
-    in_dir = pathlib.Path(__file__).parent / "data/smb"
+def test_extract_sme_filter_by_activity_code(tmp_path):
+    in_dir = pathlib.Path(__file__).parent / "data/sme"
     out_dir = tmp_path / "results"
     out_dir.mkdir()
 
@@ -271,18 +271,18 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
     call_result = extractor(
         str(in_dir),
         str(out_dir),
-        SourceDatasets.smb.value,
+        SourceDatasets.sme.value,
         activity_codes=["47"],
     )
 
     assert call_result == 2
     assert len(list(out_dir.glob("*.csv"))) == 2
 
-    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-sme-1.csv", dtype=str)
     assert len(extracted) > 0
     assert (
         sorted(extracted.columns)
-        == sorted(list(elements["smb"].values()) + ["file_id", "doc_cnt"])
+        == sorted(list(elements["sme"].values()) + ["file_id", "doc_cnt"])
     )
 
     assert all(
@@ -299,11 +299,11 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
     call_result = extractor(
         str(in_dir),
         str(out_dir),
-        SourceDatasets.smb.value,
+        SourceDatasets.sme.value,
         activity_codes=["47", "49"],
     )
 
-    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-sme-1.csv", dtype=str)
     assert all(
         c.startswith("47") or c.startswith("49")
         for c in extracted["activity_code_main"].unique()
@@ -318,11 +318,11 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
     call_result = extractor(
         str(in_dir),
         str(out_dir),
-        SourceDatasets.smb.value,
+        SourceDatasets.sme.value,
         activity_codes=["C"], # latin C rather than cyrillic :)
     )
 
-    extracted = pd.read_csv(out_dir / "data-test-smb-1.csv", dtype=str)
+    extracted = pd.read_csv(out_dir / "data-test-sme-1.csv", dtype=str)
     assert all(
         int(c.split(".")[0]) in range(10, 34)
         for c in extracted["activity_code_main"].unique()
@@ -332,7 +332,7 @@ def test_extract_smb_filter_by_activity_code(tmp_path):
 
 
 def test_extract_ydisk(monkeypatch, tmp_path):
-    in_dir = "smb"
+    in_dir = "sme"
     out_dir = tmp_path / "results"
     out_dir.mkdir()
 
@@ -341,22 +341,22 @@ def test_extract_ydisk(monkeypatch, tmp_path):
     mock_ydisk_api.put(
         "disk/resources",
         dict(Authorization=f"OAuth token"),
-        dict(path="smb"),
+        dict(path="sme"),
     )
 
-    data_dir = pathlib.Path(__file__).parent / "data" / "smb"
+    data_dir = pathlib.Path(__file__).parent / "data" / "sme"
     for f in data_dir.glob("*.zip"):
         mock_ydisk_api.post(
             "disk/resources/upload",
             dict(Authorization=f"OAuth token"),
-            dict(path=f"smb/{f.name}", url=f.name),
+            dict(path=f"sme/{f.name}", url=f.name),
         )
     monkeypatch.setattr(requests, "get", mock_get)
 
     call_result = extractor(
         in_dir,
         str(out_dir),
-        SourceDatasets.smb.value,
+        SourceDatasets.sme.value,
     )
 
     assert call_result == 2
