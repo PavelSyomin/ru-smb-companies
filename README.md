@@ -2,46 +2,63 @@
 
 A tool for creating a georeferenced dataset of all Russian small and medium-sized enterprises from Federal Tax Service (FTS) opendata.
 
-## Quick start
+## Installation
 
-Install Python and dependencies (see the list below), download this repository, unpack it to current folder, open command line and run commands.
+`pip install rmsp`
 
-### Dataset of all companies with auto-download
+## Usage 
 
-`python -m rmsp process --download`
+The extensive documentation is available via `--help` command (`rmsp --help`), so consult it first. Here is just a bfier description of a few use cases.
 
-This will download all source data from FTS servers and process it making a huge resulting table with *all* Russian SMB companies. Runtime is large (up to 2 days), disk space required is about 500 Gb.
+### Make dataset of *all* SMEs with auto-download
 
-### Dataset of some companies with auto-download
+`rmsp process --download`
 
-To reduce disk usage and runtime, you'd better filter by activity code because you probably don't need the whole dataset but instead want to focus on some economic areas.
+This command will try to download *all* source data from FTS servers and process it making a huge resulting CSV table with *all* Russian small and medium-sized enterprises. Note that source data is approximately 200 Gb in size, and intermediary and resulting files take about the same amount of disk space, thus ≈500 Gb of free disk space is recommended. The time to process *all* the data is also relatively high: up to several days depending on the CPU capability.
 
-`python -m rmsp process --download --ac 10.10 --ac D`
+### Make dataset of *some* SMEs with auto-download
 
-This will filter source data leaving only companies with main activity code starting with 10.10 or in group D of the state classifier (OCVED, see `rmsp/assets/activity_codes_classifier.csv`).
+`rmsp process --download --ac 10.10 --ac D`
 
-### No auto-download
+You can filter SMEs by NCEA Rev.2-compatible activity code («ОКВЭД» in Russia) with `--ac` option. This filtration can drastically reduce the size of intermediary and output files and desrease the processing time. However, the volume of downloaded source files is still large.
 
-You can download source zip archives manually and save them in relevant folders:
-- from https://www.nalog.gov.ru/opendata/7707329152-rsmp/ to `rmsp-data/download/smb`;
-- from https://www.nalog.gov.ru/opendata/7707329152-revexp/ to `rmsp-data/download/revexp`;
-- from https://www.nalog.gov.ru/opendata/7707329152-sshr2019/ to `rmsp-data/download/empl`.
+You can filter either by NCEA group (e. g. `--ac D`) or by a particular code (e. g. `--ac 10.10`). Note that group or code include all downstream codes, e. g. `--ac 10.10` selects SMEs with activity codes `10.10`, `10.10.1`, `10.10.2`, `10.10.1.1` (if present in the classifier). NCEA classifier can be found online. Its Russian equivalent (ОКВЭД) is stored in `rmsp/assets/activity_codes_classifier.csv` and is internally used by the app.
 
-After this, run `python -m rmsp process`. This will process downloaded files. Filtering by activity code can be done with `--ac` options, as shown earlier.
+### Make dataset from already downloaded files
 
-### Other options
+`rmsp process`
 
-Run `python -m rmsp --help` and `python -m rmsp <subcommand> --help`.
+This command first looks at the content of `rmsp-data` folder in the current working directory and tries to detect source data files inside. If there are source files, it processes them in the same way as auto-download command but without downloading the files. This is useful if you have already downloaded all source data or if you need only a part of source data (e. g. for a given year or just one file per year).
 
-## Dependencies
+There are three FTS opendata resources:
 
-- typer
-- pyspark
-- pandas
-- numpy
-- requests
-- beautifulsoup
-- tqdm
-- fuzzywuzzy
-- lxml
+- [Registry of small and medium-sized enterprises](https://www.nalog.gov.ru/opendata/7707329152-rsmp/) is the main dataset. It is expected that all its source files are downloaded to `rmsp-data/download/sme`;
+- [Data on revenue and expenditure of organizations](https://www.nalog.gov.ru/opendata/7707329152-revexp/) is an additional dataset that enriches SMEs with information about revenue and expenditure of ogranisations (no sole traders data);
+- [Data on number of employees of organisations](https://www.nalog.gov.ru/opendata/7707329152-sshr2019/) is another additional dataset. It enriches SMEs with information about number of employees of organisations (again, no sole traders data).
+
+Registry is mandatory, while revenue/expenditure and employees data is optional.
+
+Source data is expected to be stored in the following folders:
+
+- `rmsp-data/download/smb` for registry;
+- `rmsp-data/download/revexp` for revenue/expenditure;
+- `rmsp-data/download/empl` for employees.
+
+It is also possible to filter with `--ac` option here.
+
+### Running separate stages
+
+Overall, the app workflow consists of five consequtive stages: `download`, `extract`, `aggregate`, `geocode` and `panelize`. They are implemented as separate classes, and each has its own subcommand. You can run `rmsp --help` for the list of subcommands and `rmsp <subcommand> --help` for a help with a particular subcommand. In a simple case, you propably will not need to run subcommands, but they may become useful in more complex scenarios. Note that `process` is just a wrapper for `extract`, `aggregate`, `geocode` and `panelize` subcommands, and `process --download` is a shortcut for all the five subcommands.
+
+## Local *vs* cloud
+
+The tool can store source data either locally or using Yandex Disk. If you want to use Yandex.Disk, you should set `storage` and `token` options with `rmsp config --storage ydisk --token <token>` command. Token can be optained using the [Yandex Disk API instruction](https://yandex.ru/dev/disk-api/doc/ru/concepts/quickstart#oauth). Note that `ydisk` storage support is not tested as well as local mode, thus there may be unexpected bugs. It works for now, but I am not sure whether I am going to maintain it e. g. when Yandex Disk API change.
+
+## Minor options
+
+You can set number of workers (`rmsp config --num-workers`) and chunksize (`rmsp config --chunksize`). These options are used by the extract stage only. Increasing number of workers can boost the performance on multi-core CPUs. It is recommended to set it equal to the number of CPU cores or to the number of CPU cores minus 1 (if you want to continue using your machine while program run).
+
+## Output dataset structure
+
+TBD
 
