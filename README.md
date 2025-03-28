@@ -62,3 +62,11 @@ You can set number of workers (`rmsp config --num-workers`) and chunksize (`rmsp
 
 TBD
 
+## Testing
+
+The software includes automated tests (see `tests` folder).
+
+## Contributing and Development
+
+1. If you find a bug or have a feature request, please create an issue.
+2. If you want to join the development of the app, please contact me.
