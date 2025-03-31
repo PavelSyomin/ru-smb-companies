@@ -6,9 +6,9 @@ import pandas as pd
 import requests
 from typer.testing import CliRunner
 
-from rmsp.main import app, app_config
-from rmsp.stages.download import Downloader
-from rmsp.utils.enums import SourceDatasets
+from russian_sme_registry.main import app, app_config
+from russian_sme_registry.stages.download import Downloader
+from russian_sme_registry.utils.enums import SourceDatasets
 from .common import mock_get, mock_post, mock_put, mock_ydisk_api
 
 runner = CliRunner()
@@ -29,21 +29,21 @@ def test_download_all(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
 
-    download_subdirs = list((tmp_path / "rmsp-data" / "download").iterdir())
+    download_subdirs = list((tmp_path / "russian-sme-registry-data" / "download").iterdir())
     assert len(download_subdirs) == 3
     assert sorted(d.name for d in download_subdirs) == ["empl", "revexp", "sme"]
 
-    sme_files = list((tmp_path / "rmsp-data" / "download" / "sme").iterdir())
+    sme_files = list((tmp_path / "russian-sme-registry-data" / "download" / "sme").iterdir())
     assert len(sme_files) > 1
     assert sme_files[0].name.startswith("data-")
     assert sme_files[0].name.endswith(".zip")
 
-    revexp_files = list((tmp_path / "rmsp-data" / "download" / "revexp").iterdir())
+    revexp_files = list((tmp_path / "russian-sme-registry-data" / "download" / "revexp").iterdir())
     assert len(revexp_files) == 1
     assert revexp_files[0].name.startswith("data-")
     assert revexp_files[0].name.endswith(".zip")
 
-    empl_files = list((tmp_path / "rmsp-data" / "download" / "empl").iterdir())
+    empl_files = list((tmp_path / "russian-sme-registry-data" / "download" / "empl").iterdir())
     assert len(empl_files) == 1
     assert empl_files[0].name.startswith("data-")
     assert empl_files[0].name.endswith(".zip")
@@ -68,7 +68,7 @@ def test_extract_all(monkeypatch, tmp_path):
     tests_data_dir = pathlib.Path(__file__).parent / "data"
     for source_dataset in SourceDatasets:
         for f in tests_data_dir.glob(f"{source_dataset.value}/*.zip"):
-            target_dir = tmp_path / "rmsp-data" / "download" / source_dataset.value
+            target_dir = tmp_path / "russian-sme-registry-data" / "download" / source_dataset.value
             target_dir.mkdir(parents=True, exist_ok=True)
             shutil.copy(f, target_dir / f.name)
 
@@ -76,10 +76,10 @@ def test_extract_all(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
 
-    assert len(list((tmp_path / "rmsp-data" / "extract").iterdir())) == 3
-    assert len(list((tmp_path / "rmsp-data" / "extract" / "sme").glob("*.csv"))) == 2
-    assert len(list((tmp_path / "rmsp-data" / "extract" / "revexp").glob("*.csv"))) == 2
-    assert len(list((tmp_path / "rmsp-data" / "extract" / "empl").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract").iterdir())) == 3
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract" / "sme").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract" / "revexp").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract" / "empl").glob("*.csv"))) == 2
 
 
 def test_extract_all_custom_dirs(monkeypatch, tmp_path):
@@ -158,7 +158,7 @@ def test_extract_revexp_empl_does_not_accept_activity_code():
 def test_aggregate_all(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
-    in_dir = tmp_path / "rmsp-data" / "extract"
+    in_dir = tmp_path / "russian-sme-registry-data" / "extract"
     data_dir = pathlib.Path(__file__).parent / "data"
     for source_dataset in SourceDatasets:
         target_dir = in_dir / source_dataset.value
@@ -170,7 +170,7 @@ def test_aggregate_all(monkeypatch, tmp_path):
 
     assert result.exit_code == 0
 
-    out_dir = tmp_path / "rmsp-data" / "aggregate"
+    out_dir = tmp_path / "russian-sme-registry-data" / "aggregate"
     assert len(list(out_dir.iterdir())) == 3
     for source_dataset in SourceDatasets:
         assert (out_dir / source_dataset.value / "agg.csv").exists()
@@ -245,14 +245,14 @@ def test_geocode(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     src = pathlib.Path(__file__).parent / "data" / "sme" / "test-aggregated.csv"
-    dst = tmp_path / "rmsp-data" / "aggregate" / "sme" / "agg.csv"
+    dst = tmp_path / "russian-sme-registry-data" / "aggregate" / "sme" / "agg.csv"
     dst.parent.mkdir(parents=True)
     shutil.copy(src, dst)
 
     result = runner.invoke(app, ["geocode"])
     assert result.exit_code == 0
 
-    out_file = tmp_path / "rmsp-data" / "geocode" / "sme" / "geocoded.csv"
+    out_file = tmp_path / "russian-sme-registry-data" / "geocode" / "sme" / "geocoded.csv"
     assert out_file.exists()
 
 
@@ -272,24 +272,24 @@ def test_panelize(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
 
     sme_in_file_src = pathlib.Path(__file__).parent / "data" / "sme" / "test-geocoded.csv"
-    sme_in_file_dst = tmp_path / "rmsp-data" / "geocode" / "sme" / "geocoded.csv"
+    sme_in_file_dst = tmp_path / "russian-sme-registry-data" / "geocode" / "sme" / "geocoded.csv"
     sme_in_file_dst.parent.mkdir(parents=True)
     shutil.copy(sme_in_file_src, sme_in_file_dst)
 
     revexp_in_file_src = pathlib.Path(__file__).parent / "data" / "revexp" / "test-aggregated.csv"
-    revexp_in_file_dst = tmp_path / "rmsp-data" / "aggregate" / "revexp" / "agg.csv"
+    revexp_in_file_dst = tmp_path / "russian-sme-registry-data" / "aggregate" / "revexp" / "agg.csv"
     revexp_in_file_dst.parent.mkdir(parents=True)
     shutil.copy(revexp_in_file_src, revexp_in_file_dst)
 
     empl_in_file_src = pathlib.Path(__file__).parent / "data" / "empl" / "test-aggregated.csv"
-    empl_in_file_dst = tmp_path / "rmsp-data" / "aggregate" / "empl" / "agg.csv"
+    empl_in_file_dst = tmp_path / "russian-sme-registry-data" / "aggregate" / "empl" / "agg.csv"
     empl_in_file_dst.parent.mkdir(parents=True)
     shutil.copy(empl_in_file_src, empl_in_file_dst)
 
     result = runner.invoke(app, ["panelize"])
     assert result.exit_code == 0
 
-    sme_out_file = tmp_path / "rmsp-data" / "panelize" / "panel.csv"
+    sme_out_file = tmp_path / "russian-sme-registry-data" / "panelize" / "panel.csv"
     assert sme_out_file.exists()
 
 
@@ -332,7 +332,7 @@ def test_process_no_download(monkeypatch, tmp_path):
 
     for source_dataset in SourceDatasets:
         src = pathlib.Path(__file__).parent / "data" / source_dataset.value
-        dst = tmp_path / "rmsp-data" / "download" / source_dataset.value
+        dst = tmp_path / "russian-sme-registry-data" / "download" / source_dataset.value
         dst.mkdir(parents=True)
         for f in src.glob("*.zip"):
             shutil.copy(f, dst / f.name)
@@ -340,7 +340,7 @@ def test_process_no_download(monkeypatch, tmp_path):
     result = runner.invoke(app, ["process"])
     assert result.exit_code == 0
 
-    output_dir = tmp_path / "rmsp-data"
+    output_dir = tmp_path / "russian-sme-registry-data"
 
     assert len(list((output_dir / "extract").iterdir())) == 3
     assert len(list((output_dir / "aggregate").iterdir())) == 3
@@ -361,7 +361,7 @@ def test_process_with_download(monkeypatch, tmp_path):
     result = runner.invoke(app, ["process", "--download"])
     assert result.exit_code == 0
 
-    output_dir = tmp_path / "rmsp-data"
+    output_dir = tmp_path / "russian-sme-registry-data"
 
     assert len(list((output_dir / "download").iterdir())) == 3
     assert len(list((output_dir / "extract").iterdir())) == 3
@@ -448,10 +448,10 @@ def test_extract_ydisk(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert result.stdout.count("Completed in") == 6
 
-    assert len(list((tmp_path / "rmsp-data" / "extract").iterdir())) == 3
-    assert len(list((tmp_path / "rmsp-data" / "extract" / "sme").glob("*.csv"))) == 2
-    assert len(list((tmp_path / "rmsp-data" / "extract" / "revexp").glob("*.csv"))) == 2
-    assert len(list((tmp_path / "rmsp-data" / "extract" / "empl").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract").iterdir())) == 3
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract" / "sme").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract" / "revexp").glob("*.csv"))) == 2
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract" / "empl").glob("*.csv"))) == 2
 
 
 def test_process_ydisk_no_download(monkeypatch, tmp_path):
@@ -462,7 +462,7 @@ def test_process_ydisk_no_download(monkeypatch, tmp_path):
     monkeypatch.chdir(tmp_path)
    
     mock_ydisk_api.clear()
-    for top_level_path in ("rmsp-data", "rmsp-data/download"):
+    for top_level_path in ("russian-sme-registry-data", "russian-sme-registry-data/download"):
         mock_ydisk_api.put(
             "disk/resources",
             dict(Authorization=f"OAuth token"),
@@ -473,11 +473,11 @@ def test_process_ydisk_no_download(monkeypatch, tmp_path):
         mock_ydisk_api.put(
             "disk/resources",
             dict(Authorization=f"OAuth token"),
-            dict(path=f"rmsp-data/download/{source_dataset.value}"),
+            dict(path=f"russian-sme-registry-data/download/{source_dataset.value}"),
         )
 
         data_dir = pathlib.Path(__file__).parent / "data" / source_dataset.value
-        upload_dir = f"rmsp-data/download/{source_dataset.value}"
+        upload_dir = f"russian-sme-registry-data/download/{source_dataset.value}"
         for fn in data_dir.glob("*.zip"):
             mock_ydisk_api.post(
                 "disk/resources/upload",
@@ -497,7 +497,7 @@ def test_process_ydisk_no_download(monkeypatch, tmp_path):
     assert result.exit_code == 0
     assert result.stdout.count("Completed in") == 6
 
-    assert len(list((tmp_path / "rmsp-data" / "extract").iterdir())) == 3
-    assert len(list((tmp_path / "rmsp-data" / "aggregate").iterdir())) == 3
-    assert len(list((tmp_path / "rmsp-data" / "geocode").iterdir())) == 1
-    assert (tmp_path / "rmsp-data" / "panelize" / "panel.csv").exists()
+    assert len(list((tmp_path / "russian-sme-registry-data" / "extract").iterdir())) == 3
+    assert len(list((tmp_path / "russian-sme-registry-data" / "aggregate").iterdir())) == 3
+    assert len(list((tmp_path / "russian-sme-registry-data" / "geocode").iterdir())) == 1
+    assert (tmp_path / "russian-sme-registry-data" / "panelize" / "panel.csv").exists()

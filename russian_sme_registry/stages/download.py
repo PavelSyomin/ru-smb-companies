@@ -70,7 +70,7 @@ class Downloader:
         }
 
     def _get_default_download_dir(self, source_dataset: str) -> str:
-        return f"rmsp-data/download/{source_dataset}"
+        return f"russian-sme-registry-data/download/{source_dataset}"
 
     def _get_data_urls(self, source_dataset: str) -> List[str]:
         url = self.OPENDATA_URLS[source_dataset]

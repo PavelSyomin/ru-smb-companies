@@ -98,7 +98,7 @@ class MockYdiskAPI:
                 return MockResponse(status_code=400)
 
             if "download" in url:
-                path = path.replace("rmsp-data/download", "")
+                path = path.replace("russian-sme-registry-data/download", "")
                 return MockResponse(json={"href": f"data/{path}"})
             else:
                 parts = list(filter(None, path.split("/")))

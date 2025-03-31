@@ -5,15 +5,15 @@ from typing_extensions import Annotated
 
 import typer
 
-from rmsp.stages.aggregate import Aggregator
-from rmsp.stages.download import Downloader
-from rmsp.stages.extract import Extractor
-from rmsp.stages.geocode import Geocoder
-from rmsp.stages.panelize import Panelizer
-from rmsp.utils.enums import SourceDatasets, StageNames, Storages
+from russian_sme_registry.stages.aggregate import Aggregator
+from russian_sme_registry.stages.download import Downloader
+from russian_sme_registry.stages.extract import Extractor
+from russian_sme_registry.stages.geocode import Geocoder
+from russian_sme_registry.stages.panelize import Panelizer
+from russian_sme_registry.utils.enums import SourceDatasets, StageNames, Storages
 
 
-APP_NAME = "rmsp"
+APP_NAME = "russian-sme-registry"
 
 app = typer.Typer(
     help=(
@@ -66,7 +66,7 @@ def get_default_path(
     source_dataset: Optional[str] = None,
     filename: Optional[str] = None,
 ) -> pathlib.Path:
-    path = pathlib.Path("rmsp-data") / stage_name
+    path = pathlib.Path("russian-sme-registry-data") / stage_name
     if source_dataset is not None:
         path = path / source_dataset
     if filename is not None:
