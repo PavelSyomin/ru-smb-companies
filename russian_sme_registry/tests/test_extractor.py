@@ -12,6 +12,26 @@ from ..utils.elements import elements
 from ..utils.enums import SourceDatasets, Storages
 
 
+@pytest.fixture(autouse=True)
+def cleanup_history_files():
+    """Clean up history.json files after each test."""
+    test_data_dir = pathlib.Path(__file__).parent / "data"
+
+    # Clean up before test
+    for source_dataset in SourceDatasets:
+        history_file = test_data_dir / source_dataset.value / "history.json"
+        if history_file.exists():
+            history_file.unlink()
+    
+    yield
+    
+    # Clean up after test
+    for source_dataset in SourceDatasets:
+        history_file = test_data_dir / source_dataset.value / "history.json"
+        if history_file.exists():
+            history_file.unlink()
+
+
 def test_empty_input_directory(tmp_path):
     in_dir = tmp_path / "input_data"
     out_dir = tmp_path / "results"
