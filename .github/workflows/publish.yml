@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch
 
 jobs:
   test-and-publish:
@@ -26,7 +27,7 @@ jobs:
     
     - name: Install Poetry
       run: |
-        curl -sSL https://install.python-poetry.org | python3 -
+        curl -sSL https://install.python-poetry.org | python3 - --version 1.8.4
         echo "$HOME/.local/bin" >> $GITHUB_PATH
     
     - name: Load cached venv
