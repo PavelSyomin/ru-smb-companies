@@ -5,6 +5,7 @@ from typing import Optional
 
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import StructType
+from ..utils.helpers import require_java
 
 
 class SparkStage:
@@ -12,6 +13,7 @@ class SparkStage:
 
     def __init__(self, start_spark: bool = True):
         self._session = None
+        require_java()  # Check for Java before any Spark operations
 
         if start_spark:
             self._init_spark()

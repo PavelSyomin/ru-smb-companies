@@ -1,10 +1,20 @@
 [tool.poetry]
 name = "russian-sme-registry"
-version = "1.0.0-beta.1"
+version = "1.0.0-beta.2"
 description = "A command-line tool to get a georeferenced dataset of Russian small and medium-sized enterprises (SME) from open data of Federal Tax Service"
+license = "GPL-3.0-or-later"
 authors = ["Pavel Syomin <pas.ntg@gmail.com>"]
 readme = "README.md"
 packages = [{include = "russian_sme_registry"}]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Topic :: Scientific/Engineering",
+    "Topic :: Utilities"
+]
 
 [tool.poetry.dependencies]
 python = "^3.10"
@@ -22,6 +32,8 @@ python-levenshtein = "^0.23.0"
 [tool.poetry.scripts]
 russian-sme-registry = "russian_sme_registry.main:app"
 
+[project.urls]
+repository = "https://github.com/PavelSyomin/russian-sme-registry"
 
 [tool.poetry.group.test.dependencies]
 pytest = "^8.3.4"
